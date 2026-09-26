@@ -370,6 +370,41 @@ function useReduceMotionPreference() {
   return reduceMotion;
 }
 
+function useSmoothedRunning(running: boolean, enterDelay = 180, minimumVisible = 450) {
+  const [visible, setVisible] = useState(false);
+  const visibleRef = useRef(false);
+  const visibleSince = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+
+    if (running) {
+      if (!visibleRef.current) {
+        timer.current = setTimeout(() => {
+          visibleRef.current = true;
+          visibleSince.current = Date.now();
+          setVisible(true);
+        }, enterDelay);
+      }
+    } else if (visibleRef.current) {
+      const remaining = Math.max(0, minimumVisible - (Date.now() - visibleSince.current));
+      timer.current = setTimeout(() => {
+        visibleRef.current = false;
+        setVisible(false);
+      }, remaining);
+    }
+
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+    };
+  }, [enterDelay, minimumVisible, running]);
+
+  return visible;
+}
+
 function isDarkColor(color: string) {
   const match = color.match(/^#([0-9a-f]{6})/i);
   if (!match) return false;
@@ -501,12 +536,14 @@ function RunningToolSummary({
   foreground,
   mutedForeground,
   platform,
+  active = true,
 }: {
   data: z.output<typeof toolCallSchema>;
   dark: boolean;
   foreground: string;
   mutedForeground: string;
   platform: "ios" | "android" | "web";
+  active?: boolean;
 }) {
   const [width, setWidth] = useState(0);
   const sweep = useRef(new Animated.Value(0)).current;
@@ -514,7 +551,7 @@ function RunningToolSummary({
 
   useEffect(() => {
     sweep.stopAnimation();
-    if (reduceMotion !== false || width <= 0) {
+    if (!active || reduceMotion !== false || width <= 0) {
       sweep.setValue(0);
       return;
     }
@@ -537,7 +574,7 @@ function RunningToolSummary({
       animation.stop();
       sweep.stopAnimation();
     };
-  }, [platform, reduceMotion, sweep, width]);
+  }, [active, platform, reduceMotion, sweep, width]);
 
   const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-84, width + 84] });
   const softColor = mixColors(mutedForeground, foreground, dark ? 0.5 : 0.35);
@@ -574,7 +611,7 @@ function RunningToolSummary({
       style={{ flex: 1, minWidth: 0, height: 18, overflow: "hidden" }}
     >
       <ToolSummaryText data={data} color={mutedForeground} labelColor={foreground} />
-      {reduceMotion === false && width > 0 && (
+      {active && reduceMotion === false && width > 0 && (
         <>
           {renderBand(84, 0, dark ? 0.12 : 0.08, softColor)}
           {renderBand(50, 17, dark ? 0.26 : 0.16, softColor)}
@@ -984,79 +1021,31 @@ function groupBreakdown(calls: readonly ToolCardData[]) {
 
 function GroupToolList({
   calls,
-  selectedCallId,
   onSelect,
-  onBack,
+  visibleCount,
+  onShowMore,
   theme,
   layout,
 }: {
   calls: readonly ToolCardData[];
-  selectedCallId: string | null;
   onSelect(callId: string): void;
-  onBack(): void;
+  visibleCount: number;
+  onShowMore(): void;
   theme: ToolCardTheme;
   layout: ToolCardLayout;
 }) {
-  const selected = calls.find((call) => call.callId === selectedCallId) ?? null;
-  if (selected) {
-    return (
-      <View style={{ gap: 12 }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to tool calls"
-          onPress={onBack}
-          style={({ pressed }) => ({
-            minHeight: 36,
-            alignSelf: "flex-start",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            paddingHorizontal: 8,
-            borderRadius: 8,
-            backgroundColor: pressed ? theme.colors.surface2 : "transparent",
-          })}
-        >
-          <Icon name="ChevronLeft" size={14} color={theme.colors.foregroundMuted} />
-          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600" }}>
-            All tool calls
-          </Text>
-        </Pressable>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 9,
-            paddingHorizontal: 10,
-            minHeight: 42,
-            borderRadius: 9,
-            backgroundColor: theme.colors.surface1,
-          }}
-        >
-          <Icon name={selected.icon} size={14} color={theme.colors.foregroundMuted} />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <ToolSummaryText
-              data={selected}
-              color={theme.colors.foregroundMuted}
-              labelColor={theme.colors.foreground}
-            />
-          </View>
-        </View>
-        <ToolDetails data={selected} theme={theme} layout={layout} standalone />
-      </View>
-    );
-  }
+  const visibleCalls = calls.slice(0, visibleCount);
+  const remaining = calls.length - visibleCalls.length;
 
   return (
     <View
       style={{
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-        borderRadius: 10,
-        overflow: "hidden",
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
         backgroundColor: theme.colors.surface0,
       }}
     >
-      {calls.map((call, index) => {
+      {visibleCalls.map((call, index) => {
         const canExpand = Boolean(call.primary || call.secondary || call.metadata.length > 0);
         const color =
           call.status === "failed"
@@ -1074,7 +1063,7 @@ function GroupToolList({
             disabled={!canExpand}
             onPress={() => onSelect(call.callId)}
             style={({ pressed }) => ({
-              minHeight: 46,
+              minHeight: 42,
               paddingHorizontal: layout.compact ? 10 : 12,
               flexDirection: "row",
               alignItems: "center",
@@ -1108,6 +1097,29 @@ function GroupToolList({
           </Pressable>
         );
       })}
+      {remaining > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Show ${remaining} more tool calls`}
+          onPress={onShowMore}
+          style={({ pressed }) => ({
+            minHeight: 38,
+            paddingHorizontal: layout.compact ? 10 : 12,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.border,
+            backgroundColor: pressed ? theme.colors.surface2 : theme.colors.surface0,
+          })}
+        >
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "600" }}>
+            {`Show ${Math.min(12, remaining)} more`}
+          </Text>
+          <Icon name="ChevronDown" size={13} color={theme.colors.foregroundMuted} />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -1121,38 +1133,18 @@ export function ToolGroupCard({
   const { groupId, anchorCallId, controllerId } = item.data;
   const controller = useToolGrouping(agentId, anchorCallId, controllerId);
   const [, setRevision] = useState(0);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
-  const reveal = useRef(new Animated.Value(0)).current;
-  const reduceMotion = useReduceMotionPreference();
+  const [visibleCount, setVisibleCount] = useState(12);
 
   useEffect(() => {
     if (!controller) return;
     return controller.subscribe(agentId, () => setRevision((value) => value + 1));
   }, [agentId, controller]);
-  useEffect(() => {
-    reveal.stopAnimation();
-    if (reduceMotion === null) {
-      reveal.setValue(0);
-      return;
-    }
-    if (reduceMotion) {
-      reveal.setValue(1);
-      return;
-    }
-    reveal.setValue(0);
-    const animation = Animated.timing(reveal, {
-      toValue: 1,
-      duration: 240,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: layout.platform !== "web",
-      isInteraction: false,
-    });
-    animation.start();
-    return () => animation.stop();
-  }, [layout.platform, reduceMotion, reveal]);
 
   const group = controller?.getGroup(agentId, groupId) ?? null;
+  const running = group?.calls.some((call) => call.status === "running") ?? false;
+  const smoothedRunning = useSmoothedRunning(running);
   if (!group || group.calls.length === 0) {
     return (
       <View
@@ -1172,49 +1164,40 @@ export function ToolGroupCard({
   const calls = group.calls;
   const breakdown = groupBreakdown(calls);
   const failed = calls.filter((call) => call.status === "failed").length;
-  const running = calls.some((call) => call.status === "running");
   const canceled = calls.filter((call) => call.status === "canceled").length;
+  const showRunning = smoothedRunning && failed === 0;
   const statusColor = failed
     ? theme.colors.statusDanger
-    : running
+    : showRunning
       ? theme.colors.accent
       : canceled
         ? theme.colors.foregroundMuted
         : theme.colors.statusSuccess;
-  const statusText = running ? "Running" : failed ? `${failed} failed` : canceled ? `${canceled} canceled` : "Done";
+  const statusText = showRunning ? "Running" : failed ? `${failed} failed` : canceled ? `${canceled} canceled` : "Done";
   const dark = isDarkColor(theme.colors.surface0);
+  const selectedCall = calls.find((call) => call.callId === selectedCallId) ?? null;
   const summaryData: ToolCardData = {
     ...calls[calls.length - 1]!,
     title: `${calls.length} tool calls`,
     subtitle: breakdown,
   };
 
-  function setOpen(open: boolean) {
-    setDetailsOpen(open);
-    if (!open) setSelectedCallId(null);
-  }
-
   return (
-    <Animated.View
+    <View
       style={{
         marginVertical: 1,
         borderRadius: 10,
         borderWidth: 1,
         borderColor: failed
           ? alpha(theme.colors.statusDanger, "48")
-          : running
+          : showRunning
             ? alpha(theme.colors.accent, "38")
             : alpha(theme.colors.border, "B8"),
-        backgroundColor: running || failed ? theme.colors.surface1 : theme.colors.surface0,
+        backgroundColor: showRunning || failed ? theme.colors.surface1 : theme.colors.surface0,
         overflow: "hidden",
-        opacity: reveal,
-        transform: [
-          { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [4, 0] }) },
-          { scale: reveal.interpolate({ inputRange: [0, 1], outputRange: [0.992, 1] }) },
-        ],
       }}
     >
-      {(running || failed) && (
+      {(showRunning || failed) && (
         <View
           pointerEvents="none"
           style={{
@@ -1232,8 +1215,8 @@ export function ToolGroupCard({
       )}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Open ${calls.length} grouped tool calls`}
-        onPress={() => setDetailsOpen(true)}
+        accessibilityLabel={`${expanded ? "Collapse" : "Expand"} ${calls.length} grouped tool calls`}
+        onPress={() => setExpanded((value) => !value)}
         style={({ pressed }) => ({
           minHeight: 42,
           paddingHorizontal: layout.compact ? 10 : 12,
@@ -1256,25 +1239,16 @@ export function ToolGroupCard({
         >
           <Icon name="Layers" size={13} color={theme.colors.foregroundMuted} />
         </View>
-        {running ? (
-          <RunningToolSummary
-            data={summaryData}
-            dark={dark}
-            foreground={theme.colors.foreground}
-            mutedForeground={theme.colors.foregroundMuted}
-            platform={layout.platform}
-          />
-        ) : (
-          <View style={{ flex: 1, minWidth: 0, height: 18 }}>
-            <ToolSummaryText
-              data={summaryData}
-              color={theme.colors.foregroundMuted}
-              labelColor={theme.colors.foreground}
-            />
-          </View>
-        )}
+        <RunningToolSummary
+          data={summaryData}
+          dark={dark}
+          foreground={theme.colors.foreground}
+          mutedForeground={theme.colors.foregroundMuted}
+          platform={layout.platform}
+          active={showRunning}
+        />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          {running ? (
+          {showRunning ? (
             <RunningStatusDot color={statusColor} dark={dark} platform={layout.platform} />
           ) : (
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} />
@@ -1289,53 +1263,37 @@ export function ToolGroupCard({
               {failed} failed
             </Text>
           )}
-          <Icon name="ChevronRight" size={14} color={theme.colors.foregroundMuted} />
+          <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} color={theme.colors.foregroundMuted} />
         </View>
       </Pressable>
-      <Modal
-        title={selectedCallId ? "Tool details" : `${calls.length} tool calls`}
-        icon={<Icon name="Layers" size={17} color={theme.colors.foreground} />}
-        open={detailsOpen}
-        onOpenChange={setOpen}
-      >
+      {expanded && (
+        <GroupToolList
+          calls={calls}
+          onSelect={setSelectedCallId}
+          visibleCount={visibleCount}
+          onShowMore={() => setVisibleCount((value) => value + 12)}
+          theme={theme}
+          layout={layout}
+        />
+      )}
+      {selectedCall && (
+        <Modal
+          title={`${selectedCall.title} details`}
+          icon={<Icon name={selectedCall.icon} size={17} color={theme.colors.foreground} />}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSelectedCallId(null);
+          }}
+        >
         <Modal.Content
           style={{ backgroundColor: theme.colors.surface0 }}
-          contentContainerStyle={{ padding: layout.compact ? 12 : 16, gap: 12 }}
+          contentContainerStyle={{ padding: layout.compact ? 12 : 16, gap: 0 }}
         >
-          {!selectedCallId && (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text style={{ flex: 1, color: theme.colors.foregroundMuted, fontSize: 12 }}>
-                {breakdown}
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 5,
-                  paddingHorizontal: 8,
-                  minHeight: 26,
-                  borderRadius: 8,
-                  backgroundColor: theme.colors.surface2,
-                }}
-              >
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} />
-                <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "600" }}>
-                  {statusText}
-                </Text>
-              </View>
-            </View>
-          )}
-          <GroupToolList
-            calls={calls}
-            selectedCallId={selectedCallId}
-            onSelect={setSelectedCallId}
-            onBack={() => setSelectedCallId(null)}
-            theme={theme}
-            layout={layout}
-          />
+          <ToolDetails data={selectedCall} theme={theme} layout={layout} standalone />
         </Modal.Content>
       </Modal>
-    </Animated.View>
+      )}
+    </View>
   );
 }
 

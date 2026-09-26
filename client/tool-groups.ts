@@ -71,13 +71,24 @@ function isGroupableTool(item: SourceToolCall) {
   return item.detail.type !== "plan" && item.name.trim().toLocaleLowerCase() !== "speak";
 }
 
-function sameProjection(left: Map<string, Membership>, right: Map<string, Membership>) {
-  if (left.size !== right.size) return false;
+function projectionRequiresRefresh(
+  left: Map<string, Membership>,
+  right: Map<string, Membership>,
+  allowMemberAppend: boolean,
+) {
+  if (!allowMemberAppend && left.size !== right.size) return true;
   for (const [callId, membership] of left) {
     const other = right.get(callId);
-    if (!other || other.groupId !== membership.groupId || other.role !== membership.role) return false;
+    if (!other || other.groupId !== membership.groupId || other.role !== membership.role) return true;
   }
-  return true;
+  if (!allowMemberAppend) return false;
+
+  const existingGroups = new Set([...left.values()].map((membership) => membership.groupId));
+  for (const [callId, membership] of right) {
+    if (left.has(callId)) continue;
+    if (membership.role !== "member" || !existingGroups.has(membership.groupId)) return true;
+  }
+  return false;
 }
 
 export class ToolGroupingController {
@@ -112,6 +123,7 @@ export class ToolGroupingController {
     state.targets.add(callId);
     if (!state.subscription) this.startAgent(state);
     else void this.ensureTargets(state);
+    if (this.membership.get(callId)?.role === "member") this.scheduleTransformerRefresh();
     return () => {};
   }
 
@@ -302,6 +314,7 @@ export class ToolGroupingController {
   }
 
   private applyLiveItem(state: AgentGroupState, value: unknown, turnId: string | null) {
+    let appendedGroupableTool = false;
     if (isSourceToolCall(value)) {
       const existing = state.tokens.findIndex(
         (token) => token.kind === "tool" && token.item.callId === value.callId,
@@ -310,6 +323,7 @@ export class ToolGroupingController {
         const token = state.tokens[existing] as Extract<TimelineToken, { kind: "tool" }>;
         state.tokens[existing] = { ...token, turnId: turnId ?? token.turnId, item: value };
       } else {
+        appendedGroupableTool = isGroupableTool(value);
         const order = state.syntheticOrder++;
         state.tokens.push({
           kind: "tool",
@@ -323,10 +337,10 @@ export class ToolGroupingController {
       const order = state.syntheticOrder++;
       state.tokens.push({ kind: "boundary", key: `live:boundary:${order}`, order });
     }
-    this.recompute(state.agentId);
+    this.recompute(state.agentId, appendedGroupableTool);
   }
 
-  private recompute(notifyAgentId?: string) {
+  private recompute(notifyAgentId?: string, allowMemberAppend = false) {
     const nextMembership = new Map<string, Membership>();
     for (const state of this.agents.values()) {
       const nextGroups = new Map<string, ToolGroupSnapshot>();
@@ -372,7 +386,7 @@ export class ToolGroupingController {
       state.groups = nextGroups;
     }
 
-    const projectionChanged = !sameProjection(this.membership, nextMembership);
+    const projectionChanged = projectionRequiresRefresh(this.membership, nextMembership, allowMemberAppend);
     this.membership = nextMembership;
     const listeners = notifyAgentId
       ? [this.listeners.get(notifyAgentId)]
@@ -394,13 +408,12 @@ export class ToolGroupingController {
   }
 
   private installTransformer() {
-    const projection = new Map(this.membership);
     this.removeTransformer?.();
     this.removeTransformer = this.client.addTimelineTransformer({
       id: "polished-tool-call",
       query: { itemType: "tool_call" },
       transform: ({ item }) => {
-        const membership = projection.get(item.callId);
+        const membership = this.membership.get(item.callId);
         if (membership?.role === "member") return { items: [] };
         if (membership?.role === "anchor") {
           return {
