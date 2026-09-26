@@ -3,12 +3,10 @@ import { RefinedSettings } from "./client/settings";
 import {
   reasoningSchema,
   ReasoningCard,
-  toolCallSchema,
   ToolCallCard,
-  toolGroupSchema,
   ToolGroupCard,
-  toToolCardData,
 } from "./client/timeline";
+import { toolCallSchema, toolGroupSchema, toToolCardData } from "./client/tool-presentation";
 import { createToolGroupingController } from "./client/tool-groups";
 
 export default function contribute(client: PluginClientContext) {
