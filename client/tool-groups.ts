@@ -90,10 +90,21 @@ function isGroupableTool(item: SourceToolCall) {
 }
 
 function projectionRequiresRefresh(left: Map<string, Membership>, right: Map<string, Membership>) {
-  if (left.size !== right.size) return true;
+  const establishedGroups = new Set(
+    [...left.values()]
+      .filter((membership) => membership.role === "anchor")
+      .map((membership) => membership.groupId),
+  );
   for (const [callId, membership] of left) {
     const other = right.get(callId);
     if (!other || other.groupId !== membership.groupId || other.role !== membership.role) return true;
+  }
+  for (const [callId, membership] of right) {
+    if (left.has(callId)) continue;
+    // A newly arriving member of an existing group has no cached projection yet,
+    // so the installed transformer can classify it from the live membership map.
+    // Every other membership change affects an already projected source item.
+    if (membership.role !== "member" || !establishedGroups.has(membership.groupId)) return true;
   }
   return false;
 }
@@ -123,6 +134,7 @@ type ToolGroupingControllerInternal = ToolGroupingController & {
   membership: Map<string, Membership>;
   config: GroupingConfig;
   removeTransformer: (() => void) | null;
+  transformerGeneration: number;
   refreshScheduled: boolean;
   disposed: boolean;
   ensureAgent(agentId: string): AgentGroupState;
@@ -170,6 +182,7 @@ export const ToolGroupingController = function ToolGroupingController(
   this.membership = new Map();
   this.config = { enabled: true, threshold: 7, language: "en" };
   this.removeTransformer = null;
+  this.transformerGeneration = 0;
   this.refreshScheduled = false;
   this.disposed = false;
   controllers.set(this.id, this);
@@ -637,15 +650,22 @@ ToolGroupingController.prototype.scheduleTransformerRefresh = function scheduleT
 ToolGroupingController.prototype.installTransformer = function installTransformer(
   this: ToolGroupingControllerInternal,
 ) {
-    this.removeTransformer?.();
-    const membership = new Map(this.membership);
+    const previousTransformer = this.removeTransformer;
     const language = this.config.language;
-    this.removeTransformer = this.client.addTimelineTransformer({
-      id: "polished-tool-call",
+    const generation = ++this.transformerGeneration;
+    const nextTransformer = this.client.addTimelineTransformer({
+      // Paseo publishes the plugin registry synchronously on both registration
+      // and removal. Keep the previous generation installed until this one is
+      // active so a refresh never exposes the untransformed tool cards.
+      id: `polished-tool-call-${generation}`,
       query: { itemType: "tool_call" },
       transform: ({ item }) => {
         if (!isSourceToolCall(item)) return undefined;
-        const groupMembership = membership.get(item.callId);
+        // Paseo caches projections for existing source item identities. Reading
+        // live membership lets brand-new calls join an established group without
+        // reinstalling the transformer, while structural changes still refresh
+        // the cache through projectionRequiresRefresh above.
+        const groupMembership = this.membership.get(item.callId);
         if (groupMembership?.role === "member") return { items: [] };
         if (groupMembership?.role === "anchor") {
           return {
@@ -671,6 +691,8 @@ ToolGroupingController.prototype.installTransformer = function installTransforme
         };
       },
     });
+    this.removeTransformer = nextTransformer;
+    previousTransformer?.();
 };
 
 export function createToolGroupingController(

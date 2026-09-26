@@ -41,12 +41,27 @@ function present(item: SourceToolCall, language: UiLanguage): ToolCardData {
 
 function harness(entries: Array<{ item: unknown; turnId: string; seqStart: number }>) {
   const transforms: Transform[] = [];
+  const transformerEvents: Array<{ type: "add" | "remove"; id: string; active: number }> = [];
+  const activeTransformers = new Map<string, Transform>();
   let onMessage: ((message: { event: Record<string, unknown> }) => void) | null = null;
   const subscription = Object.assign(() => {}, { ready: Promise.resolve() });
   const client = {
-    addTimelineTransformer(registration: { transform: Transform }) {
+    addTimelineTransformer(registration: { id: string; transform: Transform }) {
+      assert.equal(activeTransformers.has(registration.id), false);
       transforms.push(registration.transform);
-      return () => {};
+      activeTransformers.set(registration.id, registration.transform);
+      transformerEvents.push({ type: "add", id: registration.id, active: activeTransformers.size });
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        activeTransformers.delete(registration.id);
+        transformerEvents.push({
+          type: "remove",
+          id: registration.id,
+          active: activeTransformers.size,
+        });
+      };
     },
     paseo: {
       agents: {
@@ -76,6 +91,8 @@ function harness(entries: Array<{ item: unknown; turnId: string; seqStart: numbe
   return {
     controller,
     transforms,
+    transformerEvents,
+    activeTransformers,
     emit(item: SourceToolCall, turnId = "turn-a") {
       onMessage?.({ event: { type: "timeline", item, turnId } });
     },
@@ -121,7 +138,7 @@ test("does not merge tools across turns", async () => {
   controller.dispose();
 });
 
-test("transformers capture immutable language and membership snapshots", async () => {
+test("transformers keep language snapshots while classifying newly appended members", async () => {
   const entries = Array.from({ length: 7 }, (_, index) => ({
     item: tool(String(index + 1)),
     turnId: "turn-a",
@@ -135,10 +152,9 @@ test("transformers capture immutable language and membership snapshots", async (
   assert.deepEqual(groupedTransform({ item: tool("2"), phase: "complete" }), { items: [] });
 
   emit(tool("8"));
-  const beforeRefresh = groupedTransform({ item: tool("8"), phase: "complete" }) as { items: Array<{ data: ToolCardData }> };
-  assert.equal(beforeRefresh.items[0]!.data.title, "Read file");
+  assert.deepEqual(groupedTransform({ item: tool("8"), phase: "complete" }), { items: [] });
   await settle();
-  assert.deepEqual(transforms.at(-1)!({ item: tool("8"), phase: "complete" }), { items: [] });
+  assert.equal(transforms.at(-1), groupedTransform);
 
   controller.configure({ enabled: true, threshold: 7, language: "zh-CN" });
   await settle();
@@ -147,6 +163,35 @@ test("transformers capture immutable language and membership snapshots", async (
   const newResult = transforms.at(-1)!({ item: standalone, phase: "complete" }) as { items: Array<{ data: ToolCardData }> };
   assert.equal(oldResult.items[0]!.data.title, "Read file");
   assert.equal(newResult.items[0]!.data.title, "读取文件");
+  controller.dispose();
+});
+
+test("refreshes transformers without an untransformed frame", async () => {
+  const entries = Array.from({ length: 7 }, (_, index) => ({
+    item: tool(String(index + 1)),
+    turnId: "turn-a",
+    seqStart: index + 1,
+  }));
+  const { controller, transformerEvents, activeTransformers, emit } = harness(entries);
+  controller.attach("agent", "1");
+  await settle();
+
+  assert.deepEqual(
+    transformerEvents.slice(0, 3).map(({ type, active }) => [type, active]),
+    [["add", 1], ["add", 2], ["remove", 1]],
+  );
+  assert.equal(activeTransformers.size, 1);
+
+  const beforeAppend = transformerEvents.length;
+  emit(tool("8"));
+  await settle();
+  assert.deepEqual(transformerEvents.slice(beforeAppend), []);
+  assert.equal(activeTransformers.size, 1);
+  assert.ok(transformerEvents.every(({ active }) => active > 0));
+  assert.deepEqual(
+    [...activeTransformers.values()][0]!({ item: tool("8"), phase: "complete" }),
+    { items: [] },
+  );
   controller.dispose();
 });
 
