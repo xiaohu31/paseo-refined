@@ -1,8 +1,7 @@
 export type UiLanguage = "en" | "zh-CN";
 export type UiLanguagePreference = "auto" | UiLanguage;
 
-const chinese = {
-  "Action": "操作",
+const chinese: Record<string, string> = {
   "Activity": "活动",
   "Agent": "智能体",
   "Automatic": "自动",
@@ -15,7 +14,6 @@ const chinese = {
   "Collapse diff": "收起差异",
   "Command": "命令",
   "Content": "内容",
-  "Content truncated": "内容已截断",
   "Copied": "已复制",
   "Copy": "复制",
   "Could not copy": "复制失败",
@@ -48,7 +46,6 @@ const chinese = {
   "No matches": "没有匹配项",
   "No output": "没有输出",
   "Offset": "起始位置",
-  "Output": "输出",
   "Plan": "计划",
   "Prepare worktree": "准备工作树",
   "Preparing tool group…": "正在整理工具调用…",
@@ -85,31 +82,18 @@ const chinese = {
   "Worktree": "工作树",
   "Working directory": "工作目录",
   "Write file": "写入文件",
-} as const;
-
-export type MessageKey = keyof typeof chinese;
-
-export function resolveLocaleLanguage(locale: string): UiLanguage {
-  const normalized = locale.trim().toLocaleLowerCase().replaceAll("_", "-");
-  return normalized === "zh-cn" ||
-    normalized.startsWith("zh-cn-") ||
-    normalized === "zh-sg" ||
-    normalized.startsWith("zh-sg-") ||
-    normalized === "zh-hans" ||
-    normalized.startsWith("zh-hans-")
-    ? "zh-CN"
-    : "en";
-}
+};
 
 export function resolveUiLanguage(preference: UiLanguagePreference): UiLanguage {
   if (preference !== "auto") return preference;
   try {
-    return resolveLocaleLanguage(Intl.DateTimeFormat().resolvedOptions().locale);
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale.toLocaleLowerCase();
+    return locale.startsWith("zh") ? "zh-CN" : "en";
   } catch {
     return "en";
   }
 }
 
-export function tr(language: UiLanguage, english: MessageKey) {
-  return language === "zh-CN" ? chinese[english] : english;
+export function tr(language: UiLanguage, english: string) {
+  return language === "zh-CN" ? chinese[english] ?? english : english;
 }
