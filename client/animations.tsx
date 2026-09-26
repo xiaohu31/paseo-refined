@@ -278,3 +278,90 @@ export function RunningToolSummary({
     </View>
   );
 }
+
+export function CompletedToolSummary({
+  data,
+  dark,
+  foreground,
+  mutedForeground,
+  platform,
+  trigger,
+}: {
+  data: ToolCardData;
+  dark: boolean;
+  foreground: string;
+  mutedForeground: string;
+  platform: "ios" | "android" | "web";
+  trigger: number;
+}) {
+  const [width, setWidth] = useState(0);
+  const sweep = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotionPreference();
+
+  useEffect(() => {
+    sweep.stopAnimation();
+    if (trigger <= 0 || reduceMotion !== false || width <= 0) {
+      sweep.setValue(0);
+      return;
+    }
+
+    sweep.setValue(0);
+    const animation = Animated.timing(sweep, {
+      toValue: 1,
+      duration: 620,
+      easing: Easing.bezier(0.22, 0.72, 0.24, 1),
+      useNativeDriver: platform !== "web",
+      isInteraction: false,
+    });
+    animation.start();
+    return () => {
+      animation.stop();
+      sweep.stopAnimation();
+    };
+  }, [platform, reduceMotion, sweep, trigger, width]);
+
+  const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-72, width + 72] });
+  const softColor = mixColors(mutedForeground, foreground, dark ? 0.55 : 0.58);
+  const coreColor = dark ? foreground : mixColors(mutedForeground, foreground, 0.92);
+  const renderBand = (bandWidth: number, offset: number, opacity: number, color: string, glowRadius = 0) => (
+    <Animated.View
+      accessible={false}
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        left: offset,
+        width: bandWidth,
+        opacity,
+        overflow: "hidden",
+        transform: [{ translateX: travel }],
+      }}
+    >
+      <Animated.View
+        style={{
+          width,
+          transform: [{ translateX: Animated.add(Animated.multiply(travel, -1), -offset) }],
+        }}
+      >
+        <ToolSummaryText data={data} color={color} labelColor={color} glowRadius={glowRadius} />
+      </Animated.View>
+    </Animated.View>
+  );
+
+  return (
+    <View
+      onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}
+      style={{ flex: 1, minWidth: 0, height: 18, overflow: "hidden" }}
+    >
+      <ToolSummaryText data={data} color={mutedForeground} labelColor={foreground} />
+      {trigger > 0 && reduceMotion === false && width > 0 && (
+        <>
+          {renderBand(72, 0, dark ? 0.14 : 0.12, softColor)}
+          {renderBand(42, 15, dark ? 0.34 : 0.32, softColor)}
+          {renderBand(14, 29, dark ? 0.72 : 0.68, coreColor, dark ? 2 : 0)}
+        </>
+      )}
+    </View>
+  );
+}

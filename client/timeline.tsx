@@ -1,12 +1,13 @@
 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
 import { useSettings } from "@getpaseo/plugin/client";
 import { Icon, Modal, useRevealedText } from "@getpaseo/plugin/client/react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { z } from "zod";
 import { refinedSettings } from "../shared/settings";
 import { resolveUiLanguage, tr, type UiLanguage } from "./i18n";
 import {
+  CompletedToolSummary,
   isDarkColor,
   RunningStatusDot,
   RunningToolSummary,
@@ -476,6 +477,8 @@ export function ToolCallCard({
   const data = item.data;
   const { controller, language } = useToolGrouping(agentId, data.callId, data.controllerId);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const previousStatus = useRef(data.status);
+  const [completionSweep, setCompletionSweep] = useState(0);
   const detailData = detailsOpen
     ? controller?.getCallDetails(agentId, data.callId) ?? data
     : data;
@@ -483,6 +486,15 @@ export function ToolCallCard({
   const dark = isDarkColor(theme.colors.surface0);
   const lightweight = data.status === "completed" && ["read", "search", "fetch"].includes(data.kind);
   const runningColor = theme.colors.foregroundMuted;
+
+  useEffect(() => {
+    const previous = previousStatus.current;
+    previousStatus.current = data.status;
+    if (previous === "running" && data.status === "completed") {
+      setCompletionSweep((value) => value + 1);
+    }
+  }, [data.status]);
+
   const statusColor =
     data.status === "failed"
       ? theme.colors.statusDanger
@@ -502,7 +514,7 @@ export function ToolCallCard({
             ? alpha(runningColor, "38")
             : data.status === "failed"
               ? alpha(theme.colors.statusDanger, "48")
-              : alpha(theme.colors.border, lightweight ? "78" : "B8"),
+              : alpha(theme.colors.border, lightweight ? "A0" : "C0"),
         backgroundColor: data.status === "completed" ? theme.colors.surface0 : theme.colors.surface1,
         overflow: "hidden" as const,
       },
@@ -520,7 +532,9 @@ export function ToolCallCard({
         borderRadius: 6,
         alignItems: "center" as const,
         justifyContent: "center" as const,
-        backgroundColor: data.status === "completed" ? "transparent" : theme.colors.surface2,
+        borderWidth: 1,
+        borderColor: alpha(theme.colors.border, data.status === "completed" ? "88" : "B8"),
+        backgroundColor: data.status === "completed" ? theme.colors.surface1 : theme.colors.surface2,
       },
       status: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5 },
       dot: {
@@ -536,6 +550,19 @@ export function ToolCallCard({
 
   return (
     <View style={styles.card}>
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          zIndex: 1,
+          top: 0,
+          left: 10,
+          right: 10,
+          height: 1,
+          borderRadius: 1,
+          backgroundColor: alpha(theme.colors.foreground, dark ? "10" : "0A"),
+        }}
+      />
       {(data.status === "running" || data.status === "failed") && (
         <View
           pointerEvents="none"
@@ -576,6 +603,15 @@ export function ToolCallCard({
             mutedForeground={theme.colors.foregroundMuted}
             platform={layout.platform}
           />
+        ) : data.status === "completed" ? (
+          <CompletedToolSummary
+            data={data}
+            dark={dark}
+            foreground={theme.colors.foreground}
+            mutedForeground={theme.colors.foregroundMuted}
+            platform={layout.platform}
+            trigger={completionSweep}
+          />
         ) : (
           <View style={{ flex: 1, minWidth: 0, height: 18 }}>
             <ToolSummaryText
@@ -588,6 +624,10 @@ export function ToolCallCard({
         <View style={styles.status}>
           {data.status === "running" ? (
             <RunningStatusDot color={statusColor} dark={dark} platform={layout.platform} />
+          ) : data.status === "completed" ? (
+            <View style={{ width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
+              <Icon name="Check" size={12} color={theme.colors.foregroundMuted} />
+            </View>
           ) : (
             <View style={styles.dot} />
           )}
