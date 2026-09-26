@@ -128,23 +128,23 @@ export function RunningStatusDot({
   }, [platform, progress, reduceMotion]);
 
   return (
-    <View accessible={false} style={{ width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
+    <View accessible={false} style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
       <Animated.View
         style={{
           position: "absolute",
-          width: 12,
-          height: 12,
-          borderRadius: 6,
+          width: 14,
+          height: 14,
+          borderRadius: 7,
           backgroundColor: color,
-          opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.02, dark ? 0.14 : 0.08] }),
+          opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.025, dark ? 0.18 : 0.1] }),
           transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1.15] }) }],
         }}
       />
       <Animated.View
         style={{
-          width: 6,
-          height: 6,
-          borderRadius: 3,
+          width: 7,
+          height: 7,
+          borderRadius: 3.5,
           backgroundColor: color,
           opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] }),
         }}
@@ -231,6 +231,7 @@ export function RunningToolSummary({
   }, [active, platform, reduceMotion, sweep, width]);
 
   const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-84, width + 84] });
+  const baseColor = mixColors(mutedForeground, foreground, dark ? 0.3 : 0.24);
   // A light surface cannot show a pale highlight without looking washed out.
   // Use a narrow, neutral "ink" sweep instead: stronger contrast in the core,
   // with soft shoulders so the motion remains smooth rather than flashing.
@@ -267,7 +268,7 @@ export function RunningToolSummary({
       onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}
       style={{ flex: 1, minWidth: 0, height: 18, overflow: "hidden" }}
     >
-      <ToolSummaryText data={data} color={mutedForeground} labelColor={foreground} />
+      <ToolSummaryText data={data} color={baseColor} labelColor={foreground} />
       {active && reduceMotion === false && width > 0 && (
         <>
           {renderBand(84, 0, 0.12, softColor)}
