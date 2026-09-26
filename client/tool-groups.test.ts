@@ -152,6 +152,7 @@ test("transformers keep language snapshots while classifying newly appended memb
   assert.deepEqual(groupedTransform({ item: tool("2"), phase: "complete" }), { items: [] });
 
   emit(tool("8"));
+  assert.equal(controller.isGroupedMember("8"), true);
   assert.deepEqual(groupedTransform({ item: tool("8"), phase: "complete" }), { items: [] });
   await settle();
   assert.equal(transforms.at(-1), groupedTransform);
@@ -187,6 +188,13 @@ test("refreshes transformers without an untransformed frame", async () => {
   await settle();
   assert.deepEqual(transformerEvents.slice(beforeAppend), []);
   assert.equal(activeTransformers.size, 1);
+
+  const staleProjectionMount = transformerEvents.length;
+  controller.attach("agent", "8");
+  assert.deepEqual(
+    transformerEvents.slice(staleProjectionMount).map(({ type, active }) => [type, active]),
+    [["add", 2], ["remove", 1]],
+  );
   assert.ok(transformerEvents.every(({ active }) => active > 0));
   assert.deepEqual(
     [...activeTransformers.values()][0]!({ item: tool("8"), phase: "complete" }),

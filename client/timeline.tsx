@@ -1,7 +1,7 @@
 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
 import { useSettings } from "@getpaseo/plugin/client";
 import { Icon, Modal, useRevealedText } from "@getpaseo/plugin/client/react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { z } from "zod";
 import { refinedSettings } from "../shared/settings";
@@ -114,7 +114,10 @@ function useToolGrouping(agentId: string, callId: string, controllerId: string |
     controller?.configure({ enabled, threshold, language });
   }, [controller, enabled, language, threshold]);
 
-  useEffect(() => controller?.attach(agentId, callId), [agentId, callId, controller]);
+  // A timeline event can reach Paseo's projection just before it reaches the
+  // grouping subscription. Attach before paint so a briefly standalone member
+  // is reprojected without becoming visible for a frame.
+  useLayoutEffect(() => controller?.attach(agentId, callId), [agentId, callId, controller]);
   return { controller, language };
 }
 
@@ -475,6 +478,7 @@ export function ToolCallCard({
 }: PluginTimelineItemProps<z.output<typeof toolCallSchema>>) {
   const data = item.data;
   const { controller, language } = useToolGrouping(agentId, data.callId, data.controllerId);
+  const groupedMember = controller?.isGroupedMember(data.callId) ?? false;
   const [detailsOpen, setDetailsOpen] = useState(false);
   const detailData = detailsOpen
     ? controller?.getCallDetails(agentId, data.callId) ?? data
@@ -533,6 +537,11 @@ export function ToolCallCard({
     }),
     [data.status, lightweight, theme, layout.compact, statusColor],
   );
+
+  // The transform cache may contain a standalone projection from the narrow
+  // interval before grouping state received the same event. Suppress that stale
+  // projection while the layout effect above requests its replacement.
+  if (groupedMember) return null;
 
   return (
     <View style={styles.card}>

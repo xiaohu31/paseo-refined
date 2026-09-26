@@ -120,6 +120,7 @@ export interface ToolGroupingController {
   subscribe(agentId: string, groupId: string, listener: () => void): () => void;
   getGroup(agentId: string, groupId: string): ToolGroupSnapshot | null;
   getCallDetails(agentId: string, callId: string): ToolCardData | null;
+  isGroupedMember(callId: string): boolean;
   getGroupUiState(groupId: string): GroupUiState;
   setGroupUiState(groupId: string, state: GroupUiState): void;
   dispose(): void;
@@ -219,7 +220,14 @@ ToolGroupingController.prototype.attach = function attach(
     state.targetRefs.set(callId, (state.targetRefs.get(callId) ?? 0) + 1);
     if (!state.subscription) this.startAgent(state);
     else void this.ensureTargets(state);
-    if (this.membership.get(callId)?.role === "member") this.scheduleTransformerRefresh();
+    if (this.membership.get(callId)?.role === "member") {
+      // A member renderer can only mount when Paseo projected the item just
+      // before our timeline subscription classified it. Refresh synchronously;
+      // attach runs in a layout effect, so the stale standalone card is replaced
+      // before paint instead of surviving until the next microtask.
+      this.refreshScheduled = false;
+      this.installTransformer();
+    }
     let attached = true;
     return () => {
       if (!attached) return;
@@ -271,7 +279,14 @@ ToolGroupingController.prototype.getCallDetails = function getCallDetails(
     const token = this.agents
       .get(agentId)
       ?.tokens.find((candidate) => candidate.kind === "tool" && candidate.item.callId === callId);
-    return token?.kind === "tool" ? this.present(token.item, this.config.language, false) : null;
+  return token?.kind === "tool" ? this.present(token.item, this.config.language, false) : null;
+};
+
+ToolGroupingController.prototype.isGroupedMember = function isGroupedMember(
+  this: ToolGroupingControllerInternal,
+  callId: string,
+) {
+  return this.membership.get(callId)?.role === "member";
 };
 
 ToolGroupingController.prototype.getGroupUiState = function getGroupUiState(
@@ -642,6 +657,7 @@ ToolGroupingController.prototype.scheduleTransformerRefresh = function scheduleT
     if (this.refreshScheduled || this.disposed) return;
     this.refreshScheduled = true;
     void Promise.resolve().then(() => {
+      if (!this.refreshScheduled) return;
       this.refreshScheduled = false;
       if (!this.disposed) this.installTransformer();
     });
