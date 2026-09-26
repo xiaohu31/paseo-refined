@@ -1,8 +1,11 @@
 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
+import { useSettings } from "@getpaseo/plugin/client";
 import { copyText, Icon, Modal, ScrollView, TextInput, useRevealedText, useToast } from "@getpaseo/plugin/client/react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, Text, View } from "react-native";
 import { z } from "zod";
+import { refinedSettings } from "../shared/settings";
+import { getToolGroupingController } from "./tool-groups";
 
 export const reasoningSchema = z.object({
   text: z.string(),
@@ -10,6 +13,8 @@ export const reasoningSchema = z.object({
 });
 
 export const toolCallSchema = z.object({
+  callId: z.string(),
+  controllerId: z.string().optional(),
   kind: z.enum([
     "shell",
     "read",
@@ -37,7 +42,14 @@ export const toolCallSchema = z.object({
   status: z.enum(["running", "completed", "failed", "canceled"]),
 });
 
+export const toolGroupSchema = z.object({
+  groupId: z.string(),
+  anchorCallId: z.string(),
+  controllerId: z.string(),
+});
+
 type ToolCallItem = {
+  callId: string;
   name: string;
   status: "running" | "completed" | "failed" | "canceled";
   error: unknown;
@@ -313,6 +325,7 @@ export function toToolCardData(item: ToolCallItem) {
   const error = item.status === "failed" ? compact(item.error) : "";
   return {
     ...presentation,
+    callId: item.callId,
     title: presentation.title || item.name,
     primary: clip(presentation.primary),
     secondaryLabel: error ? "Error" : presentation.secondaryLabel,
@@ -572,7 +585,7 @@ function RunningToolSummary({
   );
 }
 
-type ToolCardData = z.output<typeof toolCallSchema>;
+export type ToolCardData = z.output<typeof toolCallSchema>;
 type ToolCardTheme = PluginTimelineItemProps<ToolCardData>["theme"];
 type ToolCardLayout = PluginTimelineItemProps<ToolCardData>["layout"];
 
@@ -925,12 +938,415 @@ export function ReasoningCard({
   );
 }
 
+function useToolGrouping(agentId: string, callId: string, controllerId: string | undefined) {
+  const settings = useSettings(refinedSettings);
+  const controller = useMemo(() => getToolGroupingController(controllerId), [controllerId]);
+  const enabled = settings.status === "ready" ? settings.values.groupConsecutiveTools : true;
+  const threshold = settings.status === "ready" ? settings.values.toolGroupThreshold : 7;
+
+  useEffect(() => {
+    controller?.configure({ enabled, threshold });
+  }, [controller, enabled, threshold]);
+
+  useEffect(() => controller?.attach(agentId, callId), [agentId, callId, controller]);
+  return controller;
+}
+
+function groupBreakdown(calls: readonly ToolCardData[]) {
+  const counts = new Map<string, number>();
+  for (const call of calls) {
+    const label =
+      call.kind === "shell"
+        ? "command"
+        : call.kind === "read"
+          ? "read"
+          : call.kind === "edit" || call.kind === "write"
+            ? "edit"
+            : call.kind === "search"
+              ? "search"
+              : call.kind === "fetch"
+                ? "fetch"
+                : "other";
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  const plural = new Map([
+    ["command", "commands"],
+    ["read", "reads"],
+    ["edit", "edits"],
+    ["search", "searches"],
+    ["fetch", "fetches"],
+    ["other", "other"],
+  ]);
+  return [...counts.entries()]
+    .map(([label, count]) => `${count} ${count === 1 ? label : plural.get(label) ?? label}`)
+    .join(" · ");
+}
+
+function GroupToolList({
+  calls,
+  selectedCallId,
+  onSelect,
+  onBack,
+  theme,
+  layout,
+}: {
+  calls: readonly ToolCardData[];
+  selectedCallId: string | null;
+  onSelect(callId: string): void;
+  onBack(): void;
+  theme: ToolCardTheme;
+  layout: ToolCardLayout;
+}) {
+  const selected = calls.find((call) => call.callId === selectedCallId) ?? null;
+  if (selected) {
+    return (
+      <View style={{ gap: 12 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to tool calls"
+          onPress={onBack}
+          style={({ pressed }) => ({
+            minHeight: 36,
+            alignSelf: "flex-start",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 8,
+            borderRadius: 8,
+            backgroundColor: pressed ? theme.colors.surface2 : "transparent",
+          })}
+        >
+          <Icon name="ChevronLeft" size={14} color={theme.colors.foregroundMuted} />
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600" }}>
+            All tool calls
+          </Text>
+        </Pressable>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 9,
+            paddingHorizontal: 10,
+            minHeight: 42,
+            borderRadius: 9,
+            backgroundColor: theme.colors.surface1,
+          }}
+        >
+          <Icon name={selected.icon} size={14} color={theme.colors.foregroundMuted} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <ToolSummaryText
+              data={selected}
+              color={theme.colors.foregroundMuted}
+              labelColor={theme.colors.foreground}
+            />
+          </View>
+        </View>
+        <ToolDetails data={selected} theme={theme} layout={layout} standalone />
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        borderRadius: 10,
+        overflow: "hidden",
+        backgroundColor: theme.colors.surface0,
+      }}
+    >
+      {calls.map((call, index) => {
+        const canExpand = Boolean(call.primary || call.secondary || call.metadata.length > 0);
+        const color =
+          call.status === "failed"
+            ? theme.colors.statusDanger
+            : call.status === "running"
+              ? theme.colors.accent
+              : call.status === "completed"
+                ? theme.colors.statusSuccess
+                : theme.colors.foregroundMuted;
+        return (
+          <Pressable
+            key={call.callId}
+            accessibilityRole={canExpand ? "button" : undefined}
+            accessibilityLabel={canExpand ? `Open ${call.title} details` : call.title}
+            disabled={!canExpand}
+            onPress={() => onSelect(call.callId)}
+            style={({ pressed }) => ({
+              minHeight: 46,
+              paddingHorizontal: layout.compact ? 10 : 12,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 9,
+              borderTopWidth: index === 0 ? 0 : 1,
+              borderTopColor: theme.colors.border,
+              backgroundColor: pressed ? theme.colors.surface2 : theme.colors.surface0,
+            })}
+          >
+            <View
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 7,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: theme.colors.surface2,
+              }}
+            >
+              <Icon name={call.icon} size={13} color={theme.colors.foregroundMuted} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <ToolSummaryText
+                data={call}
+                color={theme.colors.foregroundMuted}
+                labelColor={theme.colors.foreground}
+              />
+            </View>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+            {canExpand && <Icon name="ChevronRight" size={14} color={theme.colors.foregroundMuted} />}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export function ToolGroupCard({
+  agentId,
+  item,
+  theme,
+  layout,
+}: PluginTimelineItemProps<z.output<typeof toolGroupSchema>>) {
+  const { groupId, anchorCallId, controllerId } = item.data;
+  const controller = useToolGrouping(agentId, anchorCallId, controllerId);
+  const [, setRevision] = useState(0);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
+  const reveal = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotionPreference();
+
+  useEffect(() => {
+    if (!controller) return;
+    return controller.subscribe(agentId, () => setRevision((value) => value + 1));
+  }, [agentId, controller]);
+  useEffect(() => {
+    reveal.stopAnimation();
+    if (reduceMotion === null) {
+      reveal.setValue(0);
+      return;
+    }
+    if (reduceMotion) {
+      reveal.setValue(1);
+      return;
+    }
+    reveal.setValue(0);
+    const animation = Animated.timing(reveal, {
+      toValue: 1,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: layout.platform !== "web",
+      isInteraction: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [layout.platform, reduceMotion, reveal]);
+
+  const group = controller?.getGroup(agentId, groupId) ?? null;
+  if (!group || group.calls.length === 0) {
+    return (
+      <View
+        style={{
+          minHeight: 40,
+          paddingHorizontal: 12,
+          borderRadius: 10,
+          justifyContent: "center",
+          backgroundColor: theme.colors.surface1,
+        }}
+      >
+        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>Preparing tool group…</Text>
+      </View>
+    );
+  }
+
+  const calls = group.calls;
+  const breakdown = groupBreakdown(calls);
+  const failed = calls.filter((call) => call.status === "failed").length;
+  const running = calls.some((call) => call.status === "running");
+  const canceled = calls.filter((call) => call.status === "canceled").length;
+  const statusColor = failed
+    ? theme.colors.statusDanger
+    : running
+      ? theme.colors.accent
+      : canceled
+        ? theme.colors.foregroundMuted
+        : theme.colors.statusSuccess;
+  const statusText = running ? "Running" : failed ? `${failed} failed` : canceled ? `${canceled} canceled` : "Done";
+  const dark = isDarkColor(theme.colors.surface0);
+  const summaryData: ToolCardData = {
+    ...calls[calls.length - 1]!,
+    title: `${calls.length} tool calls`,
+    subtitle: breakdown,
+  };
+
+  function setOpen(open: boolean) {
+    setDetailsOpen(open);
+    if (!open) setSelectedCallId(null);
+  }
+
+  return (
+    <Animated.View
+      style={{
+        marginVertical: 1,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: failed
+          ? alpha(theme.colors.statusDanger, "48")
+          : running
+            ? alpha(theme.colors.accent, "38")
+            : alpha(theme.colors.border, "B8"),
+        backgroundColor: running || failed ? theme.colors.surface1 : theme.colors.surface0,
+        overflow: "hidden",
+        opacity: reveal,
+        transform: [
+          { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [4, 0] }) },
+          { scale: reveal.interpolate({ inputRange: [0, 1], outputRange: [0.992, 1] }) },
+        ],
+      }}
+    >
+      {(running || failed) && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            zIndex: 1,
+            left: 0,
+            top: 7,
+            bottom: 7,
+            width: 2,
+            borderRadius: 1,
+            backgroundColor: failed ? theme.colors.statusDanger : theme.colors.accent,
+            opacity: failed ? 0.55 : 0.35,
+          }}
+        />
+      )}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${calls.length} grouped tool calls`}
+        onPress={() => setDetailsOpen(true)}
+        style={({ pressed }) => ({
+          minHeight: 42,
+          paddingHorizontal: layout.compact ? 10 : 12,
+          paddingVertical: 7,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          backgroundColor: pressed ? theme.colors.surface2 : "transparent",
+        })}
+      >
+        <View
+          style={{
+            width: 23,
+            height: 23,
+            borderRadius: 7,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: theme.colors.surface2,
+          }}
+        >
+          <Icon name="Layers" size={13} color={theme.colors.foregroundMuted} />
+        </View>
+        {running ? (
+          <RunningToolSummary
+            data={summaryData}
+            dark={dark}
+            foreground={theme.colors.foreground}
+            mutedForeground={theme.colors.foregroundMuted}
+            platform={layout.platform}
+          />
+        ) : (
+          <View style={{ flex: 1, minWidth: 0, height: 18 }}>
+            <ToolSummaryText
+              data={summaryData}
+              color={theme.colors.foregroundMuted}
+              labelColor={theme.colors.foreground}
+            />
+          </View>
+        )}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+          {running ? (
+            <RunningStatusDot color={statusColor} dark={dark} platform={layout.platform} />
+          ) : (
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} />
+          )}
+          {!layout.compact && (
+            <Text style={{ color: failed ? theme.colors.statusDanger : theme.colors.foregroundMuted, fontSize: 11 }}>
+              {statusText}
+            </Text>
+          )}
+          {layout.compact && failed > 0 && (
+            <Text style={{ color: theme.colors.statusDanger, fontSize: 10, fontWeight: "600" }}>
+              {failed} failed
+            </Text>
+          )}
+          <Icon name="ChevronRight" size={14} color={theme.colors.foregroundMuted} />
+        </View>
+      </Pressable>
+      <Modal
+        title={selectedCallId ? "Tool details" : `${calls.length} tool calls`}
+        icon={<Icon name="Layers" size={17} color={theme.colors.foreground} />}
+        open={detailsOpen}
+        onOpenChange={setOpen}
+      >
+        <Modal.Content
+          style={{ backgroundColor: theme.colors.surface0 }}
+          contentContainerStyle={{ padding: layout.compact ? 12 : 16, gap: 12 }}
+        >
+          {!selectedCallId && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ flex: 1, color: theme.colors.foregroundMuted, fontSize: 12 }}>
+                {breakdown}
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 5,
+                  paddingHorizontal: 8,
+                  minHeight: 26,
+                  borderRadius: 8,
+                  backgroundColor: theme.colors.surface2,
+                }}
+              >
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} />
+                <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "600" }}>
+                  {statusText}
+                </Text>
+              </View>
+            </View>
+          )}
+          <GroupToolList
+            calls={calls}
+            selectedCallId={selectedCallId}
+            onSelect={setSelectedCallId}
+            onBack={() => setSelectedCallId(null)}
+            theme={theme}
+            layout={layout}
+          />
+        </Modal.Content>
+      </Modal>
+    </Animated.View>
+  );
+}
+
 export function ToolCallCard({
+  agentId,
   item,
   theme,
   layout,
 }: PluginTimelineItemProps<z.output<typeof toolCallSchema>>) {
   const data = item.data;
+  useToolGrouping(agentId, data.callId, data.controllerId);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const canExpand = Boolean(data.primary || data.secondary || data.metadata.length > 0);
   const dark = isDarkColor(theme.colors.surface0);
