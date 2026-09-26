@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, Easing, Text, View } from "react-native";
 import type { ToolCardData } from "./tool-presentation";
 
@@ -308,8 +308,8 @@ export function CompletedToolSummary({
     sweep.setValue(0);
     const animation = Animated.timing(sweep, {
       toValue: 1,
-      duration: 820,
-      easing: Easing.bezier(0.22, 0.72, 0.24, 1),
+      duration: 1400,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
       useNativeDriver: platform !== "web",
       isInteraction: false,
     });
@@ -320,9 +320,9 @@ export function CompletedToolSummary({
     };
   }, [platform, reduceMotion, sweep, trigger, width]);
 
-  const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-72, width + 72] });
-  const softColor = mixColors(mutedForeground, foreground, dark ? 0.55 : 0.58);
-  const coreColor = dark ? foreground : mixColors(mutedForeground, foreground, 0.92);
+  const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-110, width + 110] });
+  const softColor = mixColors(mutedForeground, foreground, dark ? 0.45 : 0.5);
+  const coreColor = dark ? foreground : mixColors(mutedForeground, foreground, 0.85);
   const renderBand = (bandWidth: number, offset: number, opacity: number, color: string, glowRadius = 0) => (
     <Animated.View
       accessible={false}
@@ -357,9 +357,9 @@ export function CompletedToolSummary({
       <ToolSummaryText data={data} color={mutedForeground} labelColor={foreground} />
       {trigger > 0 && reduceMotion === false && width > 0 && (
         <>
-          {renderBand(72, 0, dark ? 0.14 : 0.12, softColor)}
-          {renderBand(42, 15, dark ? 0.34 : 0.32, softColor)}
-          {renderBand(14, 29, dark ? 0.72 : 0.68, coreColor, dark ? 2 : 0)}
+          {renderBand(110, 0, 0.1, softColor)}
+          {renderBand(68, 21, dark ? 0.23 : 0.25, softColor)}
+          {renderBand(24, 43, dark ? 0.5 : 0.52, coreColor, dark ? 2 : 0)}
         </>
       )}
     </View>
@@ -391,8 +391,8 @@ export function CompletionGlint({
     sweep.setValue(0);
     const animation = Animated.timing(sweep, {
       toValue: 1,
-      duration: 820,
-      easing: Easing.bezier(0.22, 0.72, 0.24, 1),
+      duration: 1400,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
       useNativeDriver: platform !== "web",
       isInteraction: false,
     });
@@ -403,7 +403,7 @@ export function CompletionGlint({
     };
   }, [platform, reduceMotion, sweep, trigger, width]);
 
-  const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-96, width + 96] });
+  const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-120, width + 120] });
 
   return (
     <View
@@ -418,41 +418,76 @@ export function CompletionGlint({
             style={{
               position: "absolute",
               top: 0,
-              bottom: 0,
               left: 0,
-              width: 88,
-              backgroundColor: color,
-              opacity: dark ? 0.035 : 0.02,
-              transform: [{ translateX: travel }],
-            }}
-          />
-          <Animated.View
-            style={{
-              position: "absolute",
-              top: 0,
-              bottom: 0,
-              left: 30,
-              width: 28,
-              backgroundColor: color,
-              opacity: dark ? 0.065 : 0.035,
-              transform: [{ translateX: travel }],
-            }}
-          />
-          <Animated.View
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 28,
-              width: 34,
+              width: 112,
               height: 1,
               borderRadius: 1,
               backgroundColor: color,
-              opacity: dark ? 0.5 : 0.24,
+              opacity: dark ? 0.16 : 0.08,
+              transform: [{ translateX: travel }],
+            }}
+          />
+          <Animated.View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 32,
+              width: 48,
+              height: 1,
+              borderRadius: 1,
+              backgroundColor: color,
+              opacity: dark ? 0.55 : 0.28,
               transform: [{ translateX: travel }],
             }}
           />
         </>
       )}
     </View>
+  );
+}
+
+export function CompletionMark({
+  children,
+  platform,
+  trigger,
+}: {
+  children: ReactNode;
+  platform: "ios" | "android" | "web";
+  trigger: number;
+}) {
+  const progress = useRef(new Animated.Value(1)).current;
+  const reduceMotion = useReduceMotionPreference();
+
+  useEffect(() => {
+    progress.stopAnimation();
+    if (trigger <= 0 || reduceMotion !== false) {
+      progress.setValue(1);
+      return;
+    }
+
+    progress.setValue(0);
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: 420,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+      useNativeDriver: platform !== "web",
+      isInteraction: false,
+    });
+    animation.start();
+    return () => {
+      animation.stop();
+      progress.stopAnimation();
+    };
+  }, [platform, progress, reduceMotion, trigger]);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }),
+        transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] }) }],
+      }}
+    >
+      {children}
+    </Animated.View>
   );
 }

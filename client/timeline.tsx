@@ -8,6 +8,7 @@ import { refinedSettings } from "../shared/settings";
 import { resolveUiLanguage, tr, type UiLanguage } from "./i18n";
 import {
   CompletionGlint,
+  CompletionMark,
   CompletedToolSummary,
   isDarkColor,
   RunningStatusDot,
@@ -638,20 +639,22 @@ export function ToolCallCard({
           {data.status === "running" ? (
             <RunningStatusDot color={statusColor} dark={dark} platform={layout.platform} />
           ) : data.status === "completed" ? (
-            <View
-              style={{
-                width: 18,
-                height: 18,
-                borderRadius: 6,
-                borderWidth: 1,
-                borderColor: alpha(theme.colors.border, "88"),
-                backgroundColor: theme.colors.surface2,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Icon name="Check" size={11} color={theme.colors.foregroundMuted} />
-            </View>
+            <CompletionMark platform={layout.platform} trigger={completionSweep}>
+              <View
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: alpha(theme.colors.border, "88"),
+                  backgroundColor: theme.colors.surface2,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Icon name="Check" size={11} color={theme.colors.foregroundMuted} />
+              </View>
+            </CompletionMark>
           ) : (
             <View style={styles.dot} />
           )}
