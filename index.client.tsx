@@ -1,11 +1,13 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
+import { RefinedSettings } from "./client/settings";
 import {
   reasoningSchema,
   ReasoningCard,
-  toolCallSchema,
   ToolCallCard,
-  toToolCardData,
+  ToolGroupCard,
 } from "./client/timeline";
+import { toolCallSchema, toolGroupSchema, toToolCardData } from "./client/tool-presentation";
+import { createToolGroupingController } from "./client/tool-groups";
 
 export default function contribute(client: PluginClientContext) {
   const cleanup = [
@@ -23,6 +25,12 @@ export default function contribute(client: PluginClientContext) {
         mutedForeground: "#71717A",
         ring: "#A1A1AA",
       },
+    }),
+    client.addSettingsScreen({
+      id: "appearance",
+      title: "Paseo Refined",
+      icon: "SlidersHorizontal",
+      Component: RefinedSettings,
     }),
     client.addTheme({
       id: "midnight-focus",
@@ -74,29 +82,23 @@ export default function contribute(client: PluginClientContext) {
       schema: reasoningSchema,
       Component: ReasoningCard,
     }),
-    client.addTimelineTransformer({
-      id: "polished-tool-call",
-      query: { itemType: "tool_call" },
-      transform: ({ item }) => ({
-        items: [
-          {
-            type: "plugin",
-            kind: "polished-tool-call",
-            version: 1,
-            data: toToolCardData(item),
-          },
-        ],
-      }),
-    }),
     client.addTimelineRenderer({
       kind: "polished-tool-call",
       version: 1,
       schema: toolCallSchema,
       Component: ToolCallCard,
     }),
+    client.addTimelineRenderer({
+      kind: "polished-tool-group",
+      version: 1,
+      schema: toolGroupSchema,
+      Component: ToolGroupCard,
+    }),
   ];
+  const toolGrouping = createToolGroupingController(client, toToolCardData);
 
   return () => {
+    toolGrouping.dispose();
     for (const remove of cleanup.reverse()) remove();
   };
 }

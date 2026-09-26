@@ -125,6 +125,7 @@ export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={tr(language, "Decrease tool grouping threshold")}
+                hitSlop={5}
                 disabled={!groupConsecutiveTools || settings.saving || toolGroupThreshold <= MIN_THRESHOLD}
                 onPress={() => void saveThreshold(toolGroupThreshold - 1)}
                 style={controlButton(!groupConsecutiveTools || settings.saving || toolGroupThreshold <= MIN_THRESHOLD)}
@@ -149,6 +150,7 @@ export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={tr(language, "Increase tool grouping threshold")}
+                hitSlop={5}
                 disabled={!groupConsecutiveTools || settings.saving || toolGroupThreshold >= MAX_THRESHOLD}
                 onPress={() => void saveThreshold(toolGroupThreshold + 1)}
                 style={controlButton(!groupConsecutiveTools || settings.saving || toolGroupThreshold >= MAX_THRESHOLD)}
