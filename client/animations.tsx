@@ -231,8 +231,11 @@ export function RunningToolSummary({
   }, [active, platform, reduceMotion, sweep, width]);
 
   const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-84, width + 84] });
-  const softColor = mixColors(mutedForeground, foreground, dark ? 0.5 : 0.35);
-  const coreColor = dark ? foreground : mixColors(mutedForeground, foreground, 0.58);
+  // A light surface cannot show a pale highlight without looking washed out.
+  // Use a narrow, neutral "ink" sweep instead: stronger contrast in the core,
+  // with soft shoulders so the motion remains smooth rather than flashing.
+  const softColor = mixColors(mutedForeground, foreground, dark ? 0.5 : 0.55);
+  const coreColor = dark ? foreground : mixColors(mutedForeground, foreground, 0.88);
   const renderBand = (bandWidth: number, offset: number, opacity: number, color: string, glowRadius = 0) => (
     <Animated.View
       accessible={false}
@@ -267,9 +270,9 @@ export function RunningToolSummary({
       <ToolSummaryText data={data} color={mutedForeground} labelColor={foreground} />
       {active && reduceMotion === false && width > 0 && (
         <>
-          {renderBand(84, 0, dark ? 0.12 : 0.08, softColor)}
-          {renderBand(50, 17, dark ? 0.26 : 0.16, softColor)}
-          {renderBand(18, 33, dark ? 0.55 : 0.32, coreColor, dark ? 2 : 0)}
+          {renderBand(84, 0, 0.12, softColor)}
+          {renderBand(50, 17, dark ? 0.26 : 0.3, softColor)}
+          {renderBand(18, 33, dark ? 0.55 : 0.64, coreColor, dark ? 2 : 0)}
         </>
       )}
     </View>
