@@ -1264,7 +1264,7 @@ export function ToolGroupCard({
         overflow: "hidden",
       }}
     >
-      {(showRunning || failed) && (
+      {(showRunning || failed > 0) && (
         <View
           pointerEvents="none"
           style={{
