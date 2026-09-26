@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Text, View } from "react-native";
 import type { ToolCardData } from "./tool-presentation";
 
@@ -128,23 +128,23 @@ export function RunningStatusDot({
   }, [platform, progress, reduceMotion]);
 
   return (
-    <View accessible={false} style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
+    <View accessible={false} style={{ width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
       <Animated.View
         style={{
           position: "absolute",
-          width: 14,
-          height: 14,
-          borderRadius: 7,
+          width: 12,
+          height: 12,
+          borderRadius: 6,
           backgroundColor: color,
-          opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.025, dark ? 0.18 : 0.1] }),
+          opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.02, dark ? 0.14 : 0.08] }),
           transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1.15] }) }],
         }}
       />
       <Animated.View
         style={{
-          width: 7,
-          height: 7,
-          borderRadius: 3.5,
+          width: 6,
+          height: 6,
+          borderRadius: 3,
           backgroundColor: color,
           opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] }),
         }}
@@ -231,7 +231,6 @@ export function RunningToolSummary({
   }, [active, platform, reduceMotion, sweep, width]);
 
   const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-84, width + 84] });
-  const baseColor = mixColors(mutedForeground, foreground, dark ? 0.3 : 0.24);
   // A light surface cannot show a pale highlight without looking washed out.
   // Use a narrow, neutral "ink" sweep instead: stronger contrast in the core,
   // with soft shoulders so the motion remains smooth rather than flashing.
@@ -268,7 +267,7 @@ export function RunningToolSummary({
       onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}
       style={{ flex: 1, minWidth: 0, height: 18, overflow: "hidden" }}
     >
-      <ToolSummaryText data={data} color={baseColor} labelColor={foreground} />
+      <ToolSummaryText data={data} color={mutedForeground} labelColor={foreground} />
       {active && reduceMotion === false && width > 0 && (
         <>
           {renderBand(84, 0, 0.12, softColor)}
@@ -277,218 +276,5 @@ export function RunningToolSummary({
         </>
       )}
     </View>
-  );
-}
-
-export function CompletedToolSummary({
-  data,
-  dark,
-  foreground,
-  mutedForeground,
-  platform,
-  trigger,
-}: {
-  data: ToolCardData;
-  dark: boolean;
-  foreground: string;
-  mutedForeground: string;
-  platform: "ios" | "android" | "web";
-  trigger: number;
-}) {
-  const [width, setWidth] = useState(0);
-  const sweep = useRef(new Animated.Value(0)).current;
-  const reduceMotion = useReduceMotionPreference();
-
-  useEffect(() => {
-    sweep.stopAnimation();
-    if (trigger <= 0 || reduceMotion !== false || width <= 0) {
-      sweep.setValue(0);
-      return;
-    }
-
-    sweep.setValue(0);
-    const animation = Animated.timing(sweep, {
-      toValue: 1,
-      duration: 1400,
-      easing: Easing.bezier(0.4, 0, 0.2, 1),
-      useNativeDriver: platform !== "web",
-      isInteraction: false,
-    });
-    animation.start();
-    return () => {
-      animation.stop();
-      sweep.stopAnimation();
-    };
-  }, [platform, reduceMotion, sweep, trigger, width]);
-
-  const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-110, width + 110] });
-  const softColor = mixColors(mutedForeground, foreground, dark ? 0.45 : 0.5);
-  const coreColor = dark ? foreground : mixColors(mutedForeground, foreground, 0.85);
-  const renderBand = (bandWidth: number, offset: number, opacity: number, color: string, glowRadius = 0) => (
-    <Animated.View
-      accessible={false}
-      pointerEvents="none"
-      style={{
-        position: "absolute",
-        top: 0,
-        bottom: 0,
-        left: offset,
-        width: bandWidth,
-        opacity,
-        overflow: "hidden",
-        transform: [{ translateX: travel }],
-      }}
-    >
-      <Animated.View
-        style={{
-          width,
-          transform: [{ translateX: Animated.add(Animated.multiply(travel, -1), -offset) }],
-        }}
-      >
-        <ToolSummaryText data={data} color={color} labelColor={color} glowRadius={glowRadius} />
-      </Animated.View>
-    </Animated.View>
-  );
-
-  return (
-    <View
-      onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}
-      style={{ flex: 1, minWidth: 0, height: 18, overflow: "hidden" }}
-    >
-      <ToolSummaryText data={data} color={mutedForeground} labelColor={foreground} />
-      {trigger > 0 && reduceMotion === false && width > 0 && (
-        <>
-          {renderBand(110, 0, 0.1, softColor)}
-          {renderBand(68, 21, dark ? 0.23 : 0.25, softColor)}
-          {renderBand(24, 43, dark ? 0.5 : 0.52, coreColor, dark ? 2 : 0)}
-        </>
-      )}
-    </View>
-  );
-}
-
-export function CompletionGlint({
-  color,
-  dark,
-  platform,
-  trigger,
-}: {
-  color: string;
-  dark: boolean;
-  platform: "ios" | "android" | "web";
-  trigger: number;
-}) {
-  const [width, setWidth] = useState(0);
-  const sweep = useRef(new Animated.Value(0)).current;
-  const reduceMotion = useReduceMotionPreference();
-
-  useEffect(() => {
-    sweep.stopAnimation();
-    if (trigger <= 0 || reduceMotion !== false || width <= 0) {
-      sweep.setValue(0);
-      return;
-    }
-
-    sweep.setValue(0);
-    const animation = Animated.timing(sweep, {
-      toValue: 1,
-      duration: 1400,
-      easing: Easing.bezier(0.4, 0, 0.2, 1),
-      useNativeDriver: platform !== "web",
-      isInteraction: false,
-    });
-    animation.start();
-    return () => {
-      animation.stop();
-      sweep.stopAnimation();
-    };
-  }, [platform, reduceMotion, sweep, trigger, width]);
-
-  const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-120, width + 120] });
-
-  return (
-    <View
-      accessible={false}
-      pointerEvents="none"
-      onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}
-      style={{ position: "absolute", zIndex: 2, top: 0, right: 0, bottom: 0, left: 0, overflow: "hidden" }}
-    >
-      {trigger > 0 && reduceMotion === false && width > 0 && (
-        <>
-          <Animated.View
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: 112,
-              height: 1,
-              borderRadius: 1,
-              backgroundColor: color,
-              opacity: dark ? 0.16 : 0.08,
-              transform: [{ translateX: travel }],
-            }}
-          />
-          <Animated.View
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 32,
-              width: 48,
-              height: 1,
-              borderRadius: 1,
-              backgroundColor: color,
-              opacity: dark ? 0.55 : 0.28,
-              transform: [{ translateX: travel }],
-            }}
-          />
-        </>
-      )}
-    </View>
-  );
-}
-
-export function CompletionMark({
-  children,
-  platform,
-  trigger,
-}: {
-  children: ReactNode;
-  platform: "ios" | "android" | "web";
-  trigger: number;
-}) {
-  const progress = useRef(new Animated.Value(1)).current;
-  const reduceMotion = useReduceMotionPreference();
-
-  useEffect(() => {
-    progress.stopAnimation();
-    if (trigger <= 0 || reduceMotion !== false) {
-      progress.setValue(1);
-      return;
-    }
-
-    progress.setValue(0);
-    const animation = Animated.timing(progress, {
-      toValue: 1,
-      duration: 420,
-      easing: Easing.bezier(0.16, 1, 0.3, 1),
-      useNativeDriver: platform !== "web",
-      isInteraction: false,
-    });
-    animation.start();
-    return () => {
-      animation.stop();
-      progress.stopAnimation();
-    };
-  }, [platform, progress, reduceMotion, trigger]);
-
-  return (
-    <Animated.View
-      style={{
-        opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }),
-        transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] }) }],
-      }}
-    >
-      {children}
-    </Animated.View>
   );
 }

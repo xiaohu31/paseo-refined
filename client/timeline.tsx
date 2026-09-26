@@ -1,15 +1,12 @@
 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
 import { useSettings } from "@getpaseo/plugin/client";
 import { Icon, Modal, useRevealedText } from "@getpaseo/plugin/client/react-native";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { z } from "zod";
 import { refinedSettings } from "../shared/settings";
 import { resolveUiLanguage, tr, type UiLanguage } from "./i18n";
 import {
-  CompletionGlint,
-  CompletionMark,
-  CompletedToolSummary,
   isDarkColor,
   RunningStatusDot,
   RunningToolSummary,
@@ -359,58 +356,13 @@ export function ToolGroupCard({
         borderColor: failed
           ? alpha(theme.colors.statusDanger, "48")
           : showRunning
-            ? alpha(runningColor, dark ? "58" : "48")
+            ? alpha(runningColor, "38")
             : alpha(theme.colors.border, "B8"),
         backgroundColor: showRunning || failed ? theme.colors.surface1 : theme.colors.surface0,
         overflow: "hidden",
       }}
     >
-      {showRunning && (
-        <>
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              zIndex: 1,
-              left: 0,
-              top: 6,
-              bottom: 6,
-              width: 6,
-              borderRadius: 3,
-              backgroundColor: runningColor,
-              opacity: dark ? 0.09 : 0.06,
-            }}
-          />
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              zIndex: 2,
-              left: 0,
-              top: 7,
-              bottom: 7,
-              width: 2,
-              borderRadius: 1,
-              backgroundColor: runningColor,
-              opacity: 0.58,
-            }}
-          />
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              zIndex: 1,
-              top: 0,
-              left: 12,
-              right: 12,
-              height: 1,
-              borderRadius: 1,
-              backgroundColor: alpha(theme.colors.foreground, dark ? "28" : "12"),
-            }}
-          />
-        </>
-      )}
-      {failed > 0 && (
+      {(showRunning || failed > 0) && (
         <View
           pointerEvents="none"
           style={{
@@ -421,8 +373,8 @@ export function ToolGroupCard({
             bottom: 7,
             width: 2,
             borderRadius: 1,
-            backgroundColor: theme.colors.statusDanger,
-            opacity: 0.55,
+            backgroundColor: failed ? theme.colors.statusDanger : runningColor,
+            opacity: failed ? 0.55 : 0.35,
           }}
         />
       )}
@@ -446,31 +398,15 @@ export function ToolGroupCard({
       >
         <View
           style={{
-            width: showRunning ? 25 : 23,
-            height: showRunning ? 25 : 23,
+            width: 23,
+            height: 23,
             borderRadius: 7,
-            borderWidth: 1,
-            borderColor: alpha(theme.colors.border, showRunning ? "C0" : "88"),
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: theme.colors.surface2,
-            overflow: "hidden",
           }}
         >
-          {showRunning && (
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 4,
-                right: 4,
-                height: 1,
-                backgroundColor: alpha(theme.colors.foreground, dark ? "30" : "14"),
-              }}
-            />
-          )}
-          <Icon name="Layers" size={showRunning ? 14 : 13} color={theme.colors.foregroundMuted} />
+          <Icon name="Layers" size={13} color={theme.colors.foregroundMuted} />
         </View>
         <RunningToolSummary
           data={summaryData}
@@ -480,26 +416,14 @@ export function ToolGroupCard({
           platform={layout.platform}
           active={showRunning}
         />
-        <View
-          style={{
-            minHeight: showRunning ? 26 : undefined,
-            paddingHorizontal: showRunning ? (layout.compact ? 5 : 7) : 0,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            borderRadius: showRunning ? 8 : 0,
-            borderWidth: showRunning ? 1 : 0,
-            borderColor: showRunning ? alpha(theme.colors.border, "98") : "transparent",
-            backgroundColor: showRunning ? theme.colors.surface2 : "transparent",
-          }}
-        >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
           {showRunning ? (
             <RunningStatusDot color={statusColor} dark={dark} platform={layout.platform} />
           ) : (
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} />
           )}
           {!layout.compact && (
-            <Text style={{ color: failed ? theme.colors.statusDanger : theme.colors.foregroundMuted, fontSize: 11, fontWeight: showRunning ? "600" : "400" }}>
+            <Text style={{ color: failed ? theme.colors.statusDanger : theme.colors.foregroundMuted, fontSize: 11 }}>
               {statusText}
             </Text>
           )}
@@ -508,8 +432,8 @@ export function ToolGroupCard({
               {statusText}
             </Text>
           )}
+          <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} color={theme.colors.foregroundMuted} />
         </View>
-        <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} color={theme.colors.foregroundMuted} />
       </Pressable>
       {expanded && (
         <GroupToolList
@@ -546,18 +470,12 @@ export function ToolGroupCard({
 export function ToolCallCard({
   agentId,
   item,
-  timestamp,
   theme,
   layout,
 }: PluginTimelineItemProps<z.output<typeof toolCallSchema>>) {
   const data = item.data;
   const { controller, language } = useToolGrouping(agentId, data.callId, data.controllerId);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const previousStatus = useRef(data.status);
-  const [completionSweep, setCompletionSweep] = useState(() => {
-    const age = Date.now() - timestamp.getTime();
-    return data.status === "completed" && age >= -1_000 && age <= 6_000 ? 1 : 0;
-  });
   const detailData = detailsOpen
     ? controller?.getCallDetails(agentId, data.callId) ?? data
     : data;
@@ -565,15 +483,6 @@ export function ToolCallCard({
   const dark = isDarkColor(theme.colors.surface0);
   const lightweight = data.status === "completed" && ["read", "search", "fetch"].includes(data.kind);
   const runningColor = theme.colors.foregroundMuted;
-
-  useEffect(() => {
-    const previous = previousStatus.current;
-    previousStatus.current = data.status;
-    if (previous === "running" && data.status === "completed") {
-      setCompletionSweep((value) => value + 1);
-    }
-  }, [data.status]);
-
   const statusColor =
     data.status === "failed"
       ? theme.colors.statusDanger
@@ -590,11 +499,11 @@ export function ToolCallCard({
         borderWidth: 1,
         borderColor:
           data.status === "running"
-            ? alpha(runningColor, dark ? "58" : "48")
+            ? alpha(runningColor, "38")
             : data.status === "failed"
               ? alpha(theme.colors.statusDanger, "48")
-              : alpha(theme.colors.border, lightweight ? "B0" : "C8"),
-        backgroundColor: theme.colors.surface1,
+              : alpha(theme.colors.border, lightweight ? "78" : "B8"),
+        backgroundColor: data.status === "completed" ? theme.colors.surface0 : theme.colors.surface1,
         overflow: "hidden" as const,
       },
       header: {
@@ -606,92 +515,28 @@ export function ToolCallCard({
         gap: 8,
       },
       icon: {
-        width: data.status === "running" ? 25 : lightweight ? 20 : 22,
-        height: data.status === "running" ? 25 : lightweight ? 20 : 22,
-        borderRadius: data.status === "running" ? 7 : 6,
+        width: lightweight ? 20 : 22,
+        height: lightweight ? 20 : 22,
+        borderRadius: 6,
         alignItems: "center" as const,
         justifyContent: "center" as const,
-        borderWidth: 1,
-        borderColor: alpha(theme.colors.border, data.status === "running" ? "C0" : data.status === "completed" ? "88" : "B8"),
-        backgroundColor: theme.colors.surface2,
-        overflow: "hidden" as const,
+        backgroundColor: data.status === "completed" ? "transparent" : theme.colors.surface2,
       },
       status: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5 },
-      runningStatus: {
-        minHeight: 26,
-        paddingHorizontal: layout.compact ? 5 : 7,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: alpha(theme.colors.border, "98"),
-        backgroundColor: theme.colors.surface2,
-      },
       dot: {
         width: data.status === "completed" ? 5 : 6,
         height: data.status === "completed" ? 5 : 6,
         borderRadius: 3,
         backgroundColor: statusColor,
       },
-      statusText: { color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: data.status === "running" ? "600" as const : "400" as const },
+      statusText: { color: theme.colors.foregroundMuted, fontSize: 11 },
     }),
     [data.status, lightweight, theme, layout.compact, statusColor],
   );
 
   return (
     <View style={styles.card}>
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          zIndex: 1,
-          top: 0,
-          left: 10,
-          right: 10,
-          height: 1,
-          borderRadius: 1,
-          backgroundColor: alpha(theme.colors.foreground, dark ? "24" : "0D"),
-        }}
-      />
-      {data.status === "completed" && (
-        <CompletionGlint
-          color={theme.colors.foreground}
-          dark={dark}
-          platform={layout.platform}
-          trigger={completionSweep}
-        />
-      )}
-      {data.status === "running" && (
-        <>
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              zIndex: 1,
-              left: 0,
-              top: 6,
-              bottom: 6,
-              width: 6,
-              borderRadius: 3,
-              backgroundColor: runningColor,
-              opacity: dark ? 0.09 : 0.06,
-            }}
-          />
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              zIndex: 2,
-              left: 0,
-              top: 7,
-              bottom: 7,
-              width: 2,
-              borderRadius: 1,
-              backgroundColor: runningColor,
-              opacity: 0.58,
-            }}
-          />
-        </>
-      )}
-      {data.status === "failed" && (
+      {(data.status === "running" || data.status === "failed") && (
         <View
           pointerEvents="none"
           style={{
@@ -702,8 +547,8 @@ export function ToolCallCard({
             bottom: 7,
             width: 2,
             borderRadius: 1,
-            backgroundColor: theme.colors.statusDanger,
-            opacity: 0.55,
+            backgroundColor: data.status === "failed" ? theme.colors.statusDanger : runningColor,
+            opacity: data.status === "failed" ? 0.55 : 0.35,
           }}
         />
       )}
@@ -721,20 +566,7 @@ export function ToolCallCard({
         style={({ pressed }) => [styles.header, pressed && { backgroundColor: theme.colors.surface2 }]}
       >
         <View style={styles.icon}>
-          {data.status === "running" && (
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 4,
-                right: 4,
-                height: 1,
-                backgroundColor: alpha(theme.colors.foreground, dark ? "30" : "14"),
-              }}
-            />
-          )}
-          <Icon name={data.icon} size={data.status === "running" ? 14 : lightweight ? 12 : 13} color={theme.colors.foregroundMuted} />
+          <Icon name={data.icon} size={lightweight ? 12 : 13} color={theme.colors.foregroundMuted} />
         </View>
         {data.status === "running" ? (
           <RunningToolSummary
@@ -743,15 +575,6 @@ export function ToolCallCard({
             foreground={theme.colors.foreground}
             mutedForeground={theme.colors.foregroundMuted}
             platform={layout.platform}
-          />
-        ) : data.status === "completed" ? (
-          <CompletedToolSummary
-            data={data}
-            dark={dark}
-            foreground={theme.colors.foreground}
-            mutedForeground={theme.colors.foregroundMuted}
-            platform={layout.platform}
-            trigger={completionSweep}
           />
         ) : (
           <View style={{ flex: 1, minWidth: 0, height: 18 }}>
@@ -762,32 +585,17 @@ export function ToolCallCard({
             />
           </View>
         )}
-        <View style={[styles.status, data.status === "running" && styles.runningStatus]}>
+        <View style={styles.status}>
           {data.status === "running" ? (
             <RunningStatusDot color={statusColor} dark={dark} platform={layout.platform} />
-          ) : data.status === "completed" ? (
-            <CompletionMark platform={layout.platform} trigger={completionSweep}>
-              <View
-                style={{
-                  width: 18,
-                  height: 18,
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderColor: alpha(theme.colors.border, "88"),
-                  backgroundColor: theme.colors.surface2,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Icon name="Check" size={11} color={theme.colors.foregroundMuted} />
-              </View>
-            </CompletionMark>
           ) : (
             <View style={styles.dot} />
           )}
           {!layout.compact && <Text style={styles.statusText}>{statusLabel(data.status, language)}</Text>}
+          {canExpand && (
+            <Icon name="ChevronRight" size={14} color={theme.colors.foregroundMuted} />
+          )}
         </View>
-        {canExpand && <Icon name="ChevronRight" size={14} color={theme.colors.foregroundMuted} />}
       </Pressable>
       {canExpand && (
         <Modal
