@@ -195,7 +195,7 @@ function GroupToolList({
           call.status === "failed"
             ? theme.colors.statusDanger
             : call.status === "running"
-              ? theme.colors.accent
+              ? theme.colors.foregroundMuted
               : call.status === "completed"
                 ? theme.colors.statusSuccess
                 : theme.colors.foregroundMuted;
@@ -321,10 +321,11 @@ export function ToolGroupCard({
   const failed = calls.filter((call) => call.status === "failed").length;
   const canceled = calls.filter((call) => call.status === "canceled").length;
   const showRunning = smoothedRunning && failed === 0;
+  const runningColor = theme.colors.foregroundMuted;
   const statusColor = failed
     ? theme.colors.statusDanger
     : showRunning
-      ? theme.colors.accent
+      ? runningColor
       : canceled
         ? theme.colors.foregroundMuted
         : theme.colors.statusSuccess;
@@ -355,7 +356,7 @@ export function ToolGroupCard({
         borderColor: failed
           ? alpha(theme.colors.statusDanger, "48")
           : showRunning
-            ? alpha(theme.colors.accent, "38")
+            ? alpha(runningColor, "38")
             : alpha(theme.colors.border, "B8"),
         backgroundColor: showRunning || failed ? theme.colors.surface1 : theme.colors.surface0,
         overflow: "hidden",
@@ -372,7 +373,7 @@ export function ToolGroupCard({
             bottom: 7,
             width: 2,
             borderRadius: 1,
-            backgroundColor: failed ? theme.colors.statusDanger : theme.colors.accent,
+            backgroundColor: failed ? theme.colors.statusDanger : runningColor,
             opacity: failed ? 0.55 : 0.35,
           }}
         />
@@ -481,11 +482,12 @@ export function ToolCallCard({
   const canExpand = Boolean(data.primary || data.secondary || data.metadata.length > 0);
   const dark = isDarkColor(theme.colors.surface0);
   const lightweight = data.status === "completed" && ["read", "search", "fetch"].includes(data.kind);
+  const runningColor = theme.colors.foregroundMuted;
   const statusColor =
     data.status === "failed"
       ? theme.colors.statusDanger
       : data.status === "running"
-        ? theme.colors.accent
+        ? runningColor
         : data.status === "completed"
           ? theme.colors.statusSuccess
           : theme.colors.foregroundMuted;
@@ -497,7 +499,7 @@ export function ToolCallCard({
         borderWidth: 1,
         borderColor:
           data.status === "running"
-            ? alpha(theme.colors.accent, "38")
+            ? alpha(runningColor, "38")
             : data.status === "failed"
               ? alpha(theme.colors.statusDanger, "48")
               : alpha(theme.colors.border, lightweight ? "78" : "B8"),
@@ -545,7 +547,7 @@ export function ToolCallCard({
             bottom: 7,
             width: 2,
             borderRadius: 1,
-            backgroundColor: data.status === "failed" ? theme.colors.statusDanger : theme.colors.accent,
+            backgroundColor: data.status === "failed" ? theme.colors.statusDanger : runningColor,
             opacity: data.status === "failed" ? 0.55 : 0.35,
           }}
         />
