@@ -308,7 +308,7 @@ export function CompletedToolSummary({
     sweep.setValue(0);
     const animation = Animated.timing(sweep, {
       toValue: 1,
-      duration: 620,
+      duration: 820,
       easing: Easing.bezier(0.22, 0.72, 0.24, 1),
       useNativeDriver: platform !== "web",
       isInteraction: false,
@@ -360,6 +360,97 @@ export function CompletedToolSummary({
           {renderBand(72, 0, dark ? 0.14 : 0.12, softColor)}
           {renderBand(42, 15, dark ? 0.34 : 0.32, softColor)}
           {renderBand(14, 29, dark ? 0.72 : 0.68, coreColor, dark ? 2 : 0)}
+        </>
+      )}
+    </View>
+  );
+}
+
+export function CompletionGlint({
+  color,
+  dark,
+  platform,
+  trigger,
+}: {
+  color: string;
+  dark: boolean;
+  platform: "ios" | "android" | "web";
+  trigger: number;
+}) {
+  const [width, setWidth] = useState(0);
+  const sweep = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotionPreference();
+
+  useEffect(() => {
+    sweep.stopAnimation();
+    if (trigger <= 0 || reduceMotion !== false || width <= 0) {
+      sweep.setValue(0);
+      return;
+    }
+
+    sweep.setValue(0);
+    const animation = Animated.timing(sweep, {
+      toValue: 1,
+      duration: 820,
+      easing: Easing.bezier(0.22, 0.72, 0.24, 1),
+      useNativeDriver: platform !== "web",
+      isInteraction: false,
+    });
+    animation.start();
+    return () => {
+      animation.stop();
+      sweep.stopAnimation();
+    };
+  }, [platform, reduceMotion, sweep, trigger, width]);
+
+  const travel = sweep.interpolate({ inputRange: [0, 1], outputRange: [-96, width + 96] });
+
+  return (
+    <View
+      accessible={false}
+      pointerEvents="none"
+      onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}
+      style={{ position: "absolute", zIndex: 2, top: 0, right: 0, bottom: 0, left: 0, overflow: "hidden" }}
+    >
+      {trigger > 0 && reduceMotion === false && width > 0 && (
+        <>
+          <Animated.View
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              width: 88,
+              backgroundColor: color,
+              opacity: dark ? 0.035 : 0.02,
+              transform: [{ translateX: travel }],
+            }}
+          />
+          <Animated.View
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 30,
+              width: 28,
+              backgroundColor: color,
+              opacity: dark ? 0.065 : 0.035,
+              transform: [{ translateX: travel }],
+            }}
+          />
+          <Animated.View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 28,
+              width: 34,
+              height: 1,
+              borderRadius: 1,
+              backgroundColor: color,
+              opacity: dark ? 0.5 : 0.24,
+              transform: [{ translateX: travel }],
+            }}
+          />
         </>
       )}
     </View>

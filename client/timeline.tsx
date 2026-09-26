@@ -7,6 +7,7 @@ import { z } from "zod";
 import { refinedSettings } from "../shared/settings";
 import { resolveUiLanguage, tr, type UiLanguage } from "./i18n";
 import {
+  CompletionGlint,
   CompletedToolSummary,
   isDarkColor,
   RunningStatusDot,
@@ -471,6 +472,7 @@ export function ToolGroupCard({
 export function ToolCallCard({
   agentId,
   item,
+  timestamp,
   theme,
   layout,
 }: PluginTimelineItemProps<z.output<typeof toolCallSchema>>) {
@@ -478,7 +480,10 @@ export function ToolCallCard({
   const { controller, language } = useToolGrouping(agentId, data.callId, data.controllerId);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const previousStatus = useRef(data.status);
-  const [completionSweep, setCompletionSweep] = useState(0);
+  const [completionSweep, setCompletionSweep] = useState(() => {
+    const age = Date.now() - timestamp.getTime();
+    return data.status === "completed" && age >= -1_000 && age <= 6_000 ? 1 : 0;
+  });
   const detailData = detailsOpen
     ? controller?.getCallDetails(agentId, data.callId) ?? data
     : data;
@@ -514,8 +519,8 @@ export function ToolCallCard({
             ? alpha(runningColor, "38")
             : data.status === "failed"
               ? alpha(theme.colors.statusDanger, "48")
-              : alpha(theme.colors.border, lightweight ? "A0" : "C0"),
-        backgroundColor: data.status === "completed" ? theme.colors.surface0 : theme.colors.surface1,
+              : alpha(theme.colors.border, lightweight ? "B0" : "C8"),
+        backgroundColor: theme.colors.surface1,
         overflow: "hidden" as const,
       },
       header: {
@@ -534,7 +539,7 @@ export function ToolCallCard({
         justifyContent: "center" as const,
         borderWidth: 1,
         borderColor: alpha(theme.colors.border, data.status === "completed" ? "88" : "B8"),
-        backgroundColor: data.status === "completed" ? theme.colors.surface1 : theme.colors.surface2,
+        backgroundColor: theme.colors.surface2,
       },
       status: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5 },
       dot: {
@@ -560,9 +565,17 @@ export function ToolCallCard({
           right: 10,
           height: 1,
           borderRadius: 1,
-          backgroundColor: alpha(theme.colors.foreground, dark ? "10" : "0A"),
+          backgroundColor: alpha(theme.colors.foreground, dark ? "24" : "0D"),
         }}
       />
+      {data.status === "completed" && (
+        <CompletionGlint
+          color={theme.colors.foreground}
+          dark={dark}
+          platform={layout.platform}
+          trigger={completionSweep}
+        />
+      )}
       {(data.status === "running" || data.status === "failed") && (
         <View
           pointerEvents="none"
@@ -625,8 +638,19 @@ export function ToolCallCard({
           {data.status === "running" ? (
             <RunningStatusDot color={statusColor} dark={dark} platform={layout.platform} />
           ) : data.status === "completed" ? (
-            <View style={{ width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
-              <Icon name="Check" size={12} color={theme.colors.foregroundMuted} />
+            <View
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: alpha(theme.colors.border, "88"),
+                backgroundColor: theme.colors.surface2,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Icon name="Check" size={11} color={theme.colors.foregroundMuted} />
             </View>
           ) : (
             <View style={styles.dot} />
