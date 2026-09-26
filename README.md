@@ -2,6 +2,14 @@
 
 A calm, cross-platform interface refinement plugin for Paseo `>=0.9.2 <0.10.0`.
 
+## Install
+
+```bash
+paseo plugin install npm:paseo-refined
+```
+
+You can also paste `npm:paseo-refined` into **Settings → Plugins → Plugin source**.
+
 ## What it changes
 
 - Adds the `Zinc Light`, `Zinc Focus`, and AMOLED-friendly `OLED Black` themes.
@@ -53,5 +61,6 @@ in full only when details are opened.
   snapshots, newest-tool visibility, settings migration, and long-detail handling.
 - `npm pack --dry-run` shows the exact publication payload; tests are excluded from the package.
 
-The package intentionally remains private until the repository URL, author, and open-source
-license are selected for the first public release.
+## License
+
+MIT
