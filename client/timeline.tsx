@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, Text, View } from "react-native";
 import { z } from "zod";
 import { refinedSettings } from "../shared/settings";
+import { resolveUiLanguage, tr, type UiLanguage } from "./i18n";
 import { getToolGroupingController } from "./tool-groups";
 
 export const reasoningSchema = z.object({
@@ -154,18 +155,18 @@ function diffStats(diff: string) {
   return { additions, deletions };
 }
 
-function toolPresentation(detail: ToolCallItem["detail"]) {
+function toolPresentation(detail: ToolCallItem["detail"], language: UiLanguage) {
   switch (detail.type) {
     case "shell":
       return {
         kind: "shell" as const,
-        title: "Command",
-        subtitle: first(summarizeCommand(detail.command), "Shell command"),
-        primaryLabel: "Command",
+        title: tr(language, "Command"),
+        subtitle: first(summarizeCommand(detail.command), tr(language, "Shell command")),
+        primaryLabel: tr(language, "Command"),
         primary: compact(detail.command),
-        secondaryLabel: "Output",
+        secondaryLabel: language === "zh-CN" ? "输出" : "Output",
         secondary: formatStructuredText(detail.output),
-        metadata: metadata(["Working directory", detail.cwd], ["Exit code", detail.exitCode]),
+        metadata: metadata([tr(language, "Working directory"), detail.cwd], [tr(language, "Exit code"), detail.exitCode]),
         isDiff: false,
         additions: 0,
         deletions: 0,
@@ -174,13 +175,13 @@ function toolPresentation(detail: ToolCallItem["detail"]) {
     case "read":
       return {
         kind: "read" as const,
-        title: "Read file",
-        subtitle: first(summarizePath(detail.filePath), "File"),
-        primaryLabel: "File",
+        title: tr(language, "Read file"),
+        subtitle: first(summarizePath(detail.filePath), tr(language, "File")),
+        primaryLabel: tr(language, "File"),
         primary: compact(detail.filePath),
-        secondaryLabel: "Content",
+        secondaryLabel: tr(language, "Content"),
         secondary: formatStructuredText(detail.content),
-        metadata: metadata(["Offset", detail.offset], ["Limit", detail.limit]),
+        metadata: metadata([tr(language, "Offset"), detail.offset], [tr(language, "Limit"), detail.limit]),
         isDiff: false,
         additions: 0,
         deletions: 0,
@@ -194,11 +195,11 @@ function toolPresentation(detail: ToolCallItem["detail"]) {
       const suffix = diff ? ` · +${stats.additions} −${stats.deletions}` : "";
       return {
         kind: detail.type as "edit" | "write",
-        title: detail.type === "edit" ? "Edit file" : "Write file",
+        title: tr(language, detail.type === "edit" ? "Edit file" : "Write file"),
         subtitle: `${filePath}${suffix}`,
-        primaryLabel: "File",
+        primaryLabel: tr(language, "File"),
         primary: compact(detail.filePath),
-        secondaryLabel: diff ? "Changes" : "Content",
+        secondaryLabel: tr(language, diff ? "Changes" : "Content"),
         secondary: first(diff, formatStructuredText(detail.content), formatStructuredText(detail.newString)),
         metadata: [],
         isDiff: Boolean(diff),
@@ -211,13 +212,13 @@ function toolPresentation(detail: ToolCallItem["detail"]) {
       const matches = compact(detail.numMatches);
       return {
         kind: "search" as const,
-        title: "Search",
-        subtitle: `${first(detail.query, "Search workspace")}${matches ? ` · ${matches} matches` : ""}`,
-        primaryLabel: "Query",
+        title: tr(language, "Search"),
+        subtitle: `${first(detail.query, tr(language, "Search workspace"))}${matches ? language === "zh-CN" ? ` · ${matches} 个匹配` : ` · ${matches} matches` : ""}`,
+        primaryLabel: tr(language, "Query"),
         primary: compact(detail.query),
-        secondaryLabel: "Results",
+        secondaryLabel: tr(language, "Results"),
         secondary: formatSearchResults(detail),
-        metadata: metadata(["Matches", detail.numMatches], ["Files", detail.numFiles], ["Duration", detail.durationMs]),
+        metadata: metadata([tr(language, "Matches"), detail.numMatches], [tr(language, "Files"), detail.numFiles], [tr(language, "Duration"), detail.durationMs]),
         isDiff: false,
         additions: 0,
         deletions: 0,
@@ -229,13 +230,13 @@ function toolPresentation(detail: ToolCallItem["detail"]) {
       const status = compact(detail.code);
       return {
         kind: "fetch" as const,
-        title: "Fetch",
-        subtitle: `${first(detail.url, "Remote resource")}${status ? ` · ${status}` : ""}`,
-        primaryLabel: "URL",
+        title: tr(language, "Fetch"),
+        subtitle: `${first(detail.url, tr(language, "Remote resource"))}${status ? ` · ${status}` : ""}`,
+        primaryLabel: tr(language, "URL"),
         primary: compact(detail.url),
-        secondaryLabel: "Response",
+        secondaryLabel: tr(language, "Response"),
         secondary: first(formatStructuredText(detail.result), detail.codeText),
-        metadata: metadata(["Status", detail.code], ["Bytes", detail.bytes], ["Duration", detail.durationMs]),
+        metadata: metadata([tr(language, "Status"), detail.code], [tr(language, "Bytes"), detail.bytes], [tr(language, "Duration"), detail.durationMs]),
         isDiff: false,
         additions: 0,
         deletions: 0,
@@ -245,13 +246,13 @@ function toolPresentation(detail: ToolCallItem["detail"]) {
     case "worktree_setup":
       return {
         kind: "worktree_setup" as const,
-        title: "Prepare worktree",
+        title: tr(language, "Prepare worktree"),
         subtitle: first(detail.branchName, detail.worktreePath),
-        primaryLabel: "Worktree",
+        primaryLabel: tr(language, "Worktree"),
         primary: first(detail.worktreePath, detail.branchName),
-        secondaryLabel: "Setup log",
+        secondaryLabel: tr(language, "Setup log"),
         secondary: first(formatStructuredText(detail.log), formatStructuredText(detail.commands)),
-        metadata: metadata(["Branch", detail.branchName]),
+        metadata: metadata([tr(language, "Branch"), detail.branchName]),
         isDiff: false,
         additions: 0,
         deletions: 0,
@@ -260,13 +261,13 @@ function toolPresentation(detail: ToolCallItem["detail"]) {
     case "sub_agent":
       return {
         kind: "sub_agent" as const,
-        title: "Subagent",
-        subtitle: first(detail.description, detail.subAgentType, "Delegated task"),
-        primaryLabel: "Task",
+        title: tr(language, "Subagent"),
+        subtitle: first(detail.description, detail.subAgentType, tr(language, "Delegated task")),
+        primaryLabel: tr(language, "Task"),
         primary: first(detail.description, detail.subAgentType),
-        secondaryLabel: "Activity",
+        secondaryLabel: tr(language, "Activity"),
         secondary: first(formatStructuredText(detail.log), formatActions(detail.actions)),
-        metadata: metadata(["Agent", detail.subAgentType]),
+        metadata: metadata([tr(language, "Agent"), detail.subAgentType]),
         isDiff: false,
         additions: 0,
         deletions: 0,
@@ -275,9 +276,9 @@ function toolPresentation(detail: ToolCallItem["detail"]) {
     case "plan":
       return {
         kind: "plan" as const,
-        title: "Plan",
-        subtitle: first(detail.text, "Implementation plan"),
-        primaryLabel: "Plan",
+        title: tr(language, "Plan"),
+        subtitle: first(detail.text, tr(language, "Implementation plan")),
+        primaryLabel: tr(language, "Plan"),
         primary: compact(detail.text),
         secondaryLabel: "",
         secondary: "",
@@ -290,9 +291,9 @@ function toolPresentation(detail: ToolCallItem["detail"]) {
     case "plain_text":
       return {
         kind: "plain_text" as const,
-        title: first(detail.label, "Tool"),
-        subtitle: first(detail.text, "Tool activity"),
-        primaryLabel: first(detail.label, "Details"),
+        title: first(detail.label, tr(language, "Tool")),
+        subtitle: first(detail.text, tr(language, "Tool activity")),
+        primaryLabel: first(detail.label, tr(language, "Details")),
         primary: compact(detail.text),
         secondaryLabel: "",
         secondary: "",
@@ -305,9 +306,9 @@ function toolPresentation(detail: ToolCallItem["detail"]) {
     default:
       return {
         kind: "unknown" as const,
-        title: "Tool",
-        subtitle: detail.type || "Tool activity",
-        primaryLabel: "Raw details",
+        title: tr(language, "Tool"),
+        subtitle: detail.type || tr(language, "Tool activity"),
+        primaryLabel: tr(language, "Raw details"),
         primary: compact(detail),
         secondaryLabel: "",
         secondary: "",
@@ -320,32 +321,37 @@ function toolPresentation(detail: ToolCallItem["detail"]) {
   }
 }
 
-export function toToolCardData(item: ToolCallItem) {
-  const presentation = toolPresentation(item.detail);
+export function toToolCardData(item: ToolCallItem, language: UiLanguage = "en") {
+  const presentation = toolPresentation(item.detail, language);
   const error = item.status === "failed" ? compact(item.error) : "";
   return {
     ...presentation,
     callId: item.callId,
     title: presentation.title || item.name,
     primary: clip(presentation.primary),
-    secondaryLabel: error ? "Error" : presentation.secondaryLabel,
+    secondaryLabel: error ? tr(language, "Error") : presentation.secondaryLabel,
     secondary: clip(error || presentation.secondary),
     isDiff: error ? false : presentation.isDiff,
     status: item.status,
   };
 }
 
-function statusLabel(status: z.output<typeof toolCallSchema>["status"]): string {
+function statusLabel(status: z.output<typeof toolCallSchema>["status"], language: UiLanguage): string {
   switch (status) {
     case "running":
-      return "Running";
+      return tr(language, "Running");
     case "completed":
-      return "Done";
+      return tr(language, "Done");
     case "failed":
-      return "Failed";
+      return tr(language, "Failed");
     case "canceled":
-      return "Canceled";
+      return tr(language, "Canceled");
   }
+}
+
+function useUiLanguage() {
+  const settings = useSettings(refinedSettings);
+  return resolveUiLanguage(settings.status === "ready" ? settings.values.uiLanguage : "auto");
 }
 
 function useReduceMotionPreference() {
@@ -522,7 +528,7 @@ function ToolSummaryText({
         textShadowRadius: glowRadius,
       }}
     >
-      {data.title === "Command" ? null : (
+      {data.kind === "shell" ? null : (
         <Text style={{ color: labelColor, fontWeight: "500" }}>{`${data.title.replace(" file", "")} · `}</Text>
       )}
       {data.subtitle}
@@ -634,11 +640,13 @@ function DetailSearch({
   query,
   onChange,
   count,
+  language,
   theme,
 }: {
   query: string;
   onChange(value: string): void;
   count: number;
+  language: UiLanguage;
   theme: ToolCardTheme;
 }) {
   return (
@@ -657,10 +665,10 @@ function DetailSearch({
     >
       <Icon name="Search" size={13} color={theme.colors.foregroundMuted} />
       <TextInput
-        accessibilityLabel="Search details"
+        accessibilityLabel={tr(language, "Search details")}
         value={query}
         onChangeText={onChange}
-        placeholder="Find in details"
+        placeholder={tr(language, "Find in details")}
         placeholderTextColor={theme.colors.foregroundMuted}
         autoCapitalize="none"
         autoCorrect={false}
@@ -676,12 +684,14 @@ function CodeBlock({
   value,
   theme,
   layout,
+  language,
   tail = false,
 }: {
   label: string;
   value: string;
   theme: ToolCardTheme;
   layout: ToolCardLayout;
+  language: UiLanguage;
   tail?: boolean;
 }) {
   const toast = useToast();
@@ -699,9 +709,9 @@ function CodeBlock({
   async function copy() {
     try {
       await copyText(value);
-      toast.show("Copied", { variant: "success" });
+      toast.show(tr(language, "Copied"), { variant: "success" });
     } catch {
-      toast.error("Could not copy");
+      toast.error(tr(language, "Could not copy"));
     }
   }
 
@@ -713,16 +723,16 @@ function CodeBlock({
         </Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Copy ${label}`}
+          accessibilityLabel={language === "zh-CN" ? `复制${label}` : `Copy ${label}`}
           onPress={copy}
           style={{ minWidth: 44, minHeight: 24, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 5 }}
         >
           <Icon name="Copy" size={12} color={theme.colors.foregroundMuted} />
-          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>Copy</Text>
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>{tr(language, "Copy")}</Text>
         </Pressable>
       </View>
       {lines.length > 8 && (
-        <DetailSearch query={query} onChange={setQuery} count={matchingLines.length} theme={theme} />
+        <DetailSearch query={query} onChange={setQuery} count={matchingLines.length} language={language} theme={theme} />
       )}
       <View
         style={{
@@ -746,22 +756,30 @@ function CodeBlock({
               </Text>
             ))
           ) : (
-            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>No matches</Text>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{tr(language, "No matches")}</Text>
           )
         ) : (
           <Text selectable style={{ color: theme.colors.foreground, fontFamily: mono, fontSize: 12, lineHeight: 18 }}>
-            {visible.join("\n") || "No output"}
+            {visible.join("\n") || tr(language, "No output")}
           </Text>
         )}
         {hasMore && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={showAll ? `Collapse ${label}` : `Show all ${label}`}
+            accessibilityLabel={
+              language === "zh-CN"
+                ? `${showAll ? "收起" : "显示全部"}${label}`
+                : showAll ? `Collapse ${label}` : `Show all ${label}`
+            }
             onPress={() => setShowAll((value) => !value)}
             style={{ minHeight: 32, justifyContent: "flex-end", paddingTop: 8 }}
           >
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "600" }}>
-              {showAll ? "Show less" : `Show all · ${matchingLines.length} lines`}
+              {showAll
+                ? tr(language, "Show less")
+                : language === "zh-CN"
+                  ? `显示全部 · ${matchingLines.length} 行`
+                  : `Show all · ${matchingLines.length} lines`}
             </Text>
           </Pressable>
         )}
@@ -770,7 +788,17 @@ function CodeBlock({
   );
 }
 
-function DiffViewer({ data, theme, layout }: { data: ToolCardData; theme: ToolCardTheme; layout: ToolCardLayout }) {
+function DiffViewer({
+  data,
+  theme,
+  layout,
+  language,
+}: {
+  data: ToolCardData;
+  theme: ToolCardTheme;
+  layout: ToolCardLayout;
+  language: UiLanguage;
+}) {
   const toast = useToast();
   const [showAll, setShowAll] = useState(false);
   const [query, setQuery] = useState("");
@@ -786,9 +814,9 @@ function DiffViewer({ data, theme, layout }: { data: ToolCardData; theme: ToolCa
   async function copy() {
     try {
       await copyText(data.secondary);
-      toast.show("Diff copied", { variant: "success" });
+      toast.show(tr(language, "Diff copied"), { variant: "success" });
     } catch {
-      toast.error("Could not copy diff");
+      toast.error(tr(language, "Could not copy diff"));
     }
   }
 
@@ -796,29 +824,29 @@ function DiffViewer({ data, theme, layout }: { data: ToolCardData; theme: ToolCa
     <View style={{ gap: 6 }}>
       <View style={{ minHeight: 24, flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Text style={{ flex: 1, color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "600" }}>
-          CHANGES
+          {tr(language, "CHANGES")}
           <Text style={{ color: theme.colors.statusSuccess }}>{`  +${data.additions}`}</Text>
           <Text style={{ color: theme.colors.statusDanger }}>{`  −${data.deletions}`}</Text>
         </Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Copy diff"
+          accessibilityLabel={language === "zh-CN" ? "复制差异" : "Copy diff"}
           onPress={copy}
           style={{ minWidth: 44, minHeight: 24, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 5 }}
         >
           <Icon name="Copy" size={12} color={theme.colors.foregroundMuted} />
-          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>Copy</Text>
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>{tr(language, "Copy")}</Text>
         </Pressable>
       </View>
       {lines.length > 12 && (
-        <DetailSearch query={query} onChange={setQuery} count={matchingLines.length} theme={theme} />
+        <DetailSearch query={query} onChange={setQuery} count={matchingLines.length} language={language} theme={theme} />
       )}
       <View style={{ borderWidth: 1, borderColor: theme.colors.border, borderRadius: 8, overflow: "hidden", backgroundColor: theme.colors.surface1 }}>
         <ScrollView horizontal contentContainerStyle={{ minWidth: "100%" }}>
           <View style={{ minWidth: "100%", paddingVertical: 6 }}>
             {visible.length === 0 && (
               <Text style={{ paddingHorizontal: 10, color: theme.colors.foregroundMuted, fontSize: 12 }}>
-                No matches
+                {tr(language, "No matches")}
               </Text>
             )}
             {visible.map((line, index) => {
@@ -854,12 +882,16 @@ function DiffViewer({ data, theme, layout }: { data: ToolCardData; theme: ToolCa
         {hasMore && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={showAll ? "Collapse diff" : "Show full diff"}
+            accessibilityLabel={tr(language, showAll ? "Collapse diff" : "Show full diff")}
             onPress={() => setShowAll((value) => !value)}
             style={{ minHeight: 38, justifyContent: "center", paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: theme.colors.border }}
           >
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "600" }}>
-              {showAll ? "Show less" : `Show all · ${matchingLines.length} lines`}
+              {showAll
+                ? tr(language, "Show less")
+                : language === "zh-CN"
+                  ? `显示全部 · ${matchingLines.length} 行`
+                  : `Show all · ${matchingLines.length} lines`}
             </Text>
           </Pressable>
         )}
@@ -872,14 +904,16 @@ function ToolDetails({
   data,
   theme,
   layout,
+  language,
   standalone = false,
 }: {
   data: ToolCardData;
   theme: ToolCardTheme;
   layout: ToolCardLayout;
+  language: UiLanguage;
   standalone?: boolean;
 }) {
-  const tailOutput = data.kind === "shell" || data.secondaryLabel === "Error";
+  const tailOutput = data.kind === "shell" || data.status === "failed";
   return (
     <View
       style={{
@@ -904,12 +938,12 @@ function ToolDetails({
           ))}
         </View>
       )}
-      {data.primary && <CodeBlock label={data.primaryLabel || "Input"} value={data.primary} theme={theme} layout={layout} />}
+      {data.primary && <CodeBlock label={data.primaryLabel || tr(language, "Input")} value={data.primary} theme={theme} layout={layout} language={language} />}
       {data.secondary &&
         (data.isDiff ? (
-          <DiffViewer data={data} theme={theme} layout={layout} />
+          <DiffViewer data={data} theme={theme} layout={layout} language={language} />
         ) : (
-          <CodeBlock label={data.secondaryLabel || "Result"} value={data.secondary} theme={theme} layout={layout} tail={tailOutput} />
+          <CodeBlock label={data.secondaryLabel || tr(language, "Result")} value={data.secondary} theme={theme} layout={layout} language={language} tail={tailOutput} />
         ))}
     </View>
   );
@@ -921,6 +955,7 @@ export function ReasoningCard({
   layout,
 }: PluginTimelineItemProps<z.output<typeof reasoningSchema>>) {
   const { text, phase } = item.data;
+  const language = useUiLanguage();
   const [expanded, setExpanded] = useState(phase === "streaming");
   const revealedText = useRevealedText(text, phase);
   useEffect(() => {
@@ -961,16 +996,20 @@ export function ReasoningCard({
     <View style={styles.card}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${expanded ? "Collapse" : "Expand"} reasoning`}
+        accessibilityLabel={
+          language === "zh-CN"
+            ? `${expanded ? "收起" : "展开"}思考内容`
+            : `${expanded ? "Collapse" : "Expand"} reasoning`
+        }
         onPress={() => setExpanded((value) => !value)}
         style={styles.header}
       >
         <Icon name="Brain" size={14} color={theme.colors.foregroundMuted} />
-        <Text style={styles.title}>Reasoning</Text>
-        {phase === "streaming" && <Text style={styles.state}>Thinking…</Text>}
+        <Text style={styles.title}>{tr(language, "Reasoning")}</Text>
+        {phase === "streaming" && <Text style={styles.state}>{tr(language, "Thinking…")}</Text>}
         <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} color={theme.colors.foregroundMuted} />
       </Pressable>
-      {expanded && <Text selectable style={styles.body}>{revealedText || "Thinking…"}</Text>}
+      {expanded && <Text selectable style={styles.body}>{revealedText || tr(language, "Thinking…")}</Text>}
     </View>
   );
 }
@@ -980,16 +1019,17 @@ function useToolGrouping(agentId: string, callId: string, controllerId: string |
   const controller = useMemo(() => getToolGroupingController(controllerId), [controllerId]);
   const enabled = settings.status === "ready" ? settings.values.groupConsecutiveTools : true;
   const threshold = settings.status === "ready" ? settings.values.toolGroupThreshold : 7;
+  const language = resolveUiLanguage(settings.status === "ready" ? settings.values.uiLanguage : "auto");
 
   useEffect(() => {
-    controller?.configure({ enabled, threshold });
-  }, [controller, enabled, threshold]);
+    controller?.configure({ enabled, threshold, language });
+  }, [controller, enabled, language, threshold]);
 
   useEffect(() => controller?.attach(agentId, callId), [agentId, callId, controller]);
-  return controller;
+  return { controller, language };
 }
 
-function groupBreakdown(calls: readonly ToolCardData[]) {
+function groupBreakdown(calls: readonly ToolCardData[], language: UiLanguage) {
   const counts = new Map<string, number>();
   for (const call of calls) {
     const label =
@@ -1014,6 +1054,19 @@ function groupBreakdown(calls: readonly ToolCardData[]) {
     ["fetch", "fetches"],
     ["other", "other"],
   ]);
+  if (language === "zh-CN") {
+    const chineseLabels = new Map([
+      ["command", "次命令"],
+      ["read", "次读取"],
+      ["edit", "次编辑"],
+      ["search", "次搜索"],
+      ["fetch", "次获取"],
+      ["other", "次其他调用"],
+    ]);
+    return [...counts.entries()]
+      .map(([label, count]) => `${count} ${chineseLabels.get(label) ?? label}`)
+      .join(" · ");
+  }
   return [...counts.entries()]
     .map(([label, count]) => `${count} ${count === 1 ? label : plural.get(label) ?? label}`)
     .join(" · ");
@@ -1024,6 +1077,7 @@ function GroupToolList({
   onSelect,
   visibleCount,
   onShowMore,
+  language,
   theme,
   layout,
 }: {
@@ -1031,6 +1085,7 @@ function GroupToolList({
   onSelect(callId: string): void;
   visibleCount: number;
   onShowMore(): void;
+  language: UiLanguage;
   theme: ToolCardTheme;
   layout: ToolCardLayout;
 }) {
@@ -1059,7 +1114,13 @@ function GroupToolList({
           <Pressable
             key={call.callId}
             accessibilityRole={canExpand ? "button" : undefined}
-            accessibilityLabel={canExpand ? `Open ${call.title} details` : call.title}
+            accessibilityLabel={
+              canExpand
+                ? language === "zh-CN"
+                  ? `打开${call.title}详情`
+                  : `Open ${call.title} details`
+                : call.title
+            }
             disabled={!canExpand}
             onPress={() => onSelect(call.callId)}
             style={({ pressed }) => ({
@@ -1100,7 +1161,7 @@ function GroupToolList({
       {remaining > 0 && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Show ${remaining} more tool calls`}
+          accessibilityLabel={language === "zh-CN" ? `再显示 ${remaining} 个工具调用` : `Show ${remaining} more tool calls`}
           onPress={onShowMore}
           style={({ pressed }) => ({
             minHeight: 38,
@@ -1115,7 +1176,7 @@ function GroupToolList({
           })}
         >
           <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "600" }}>
-            {`Show ${Math.min(12, remaining)} more`}
+            {language === "zh-CN" ? `再显示 ${Math.min(12, remaining)} 项` : `Show ${Math.min(12, remaining)} more`}
           </Text>
           <Icon name="ChevronDown" size={13} color={theme.colors.foregroundMuted} />
         </Pressable>
@@ -1131,7 +1192,7 @@ export function ToolGroupCard({
   layout,
 }: PluginTimelineItemProps<z.output<typeof toolGroupSchema>>) {
   const { groupId, anchorCallId, controllerId } = item.data;
-  const controller = useToolGrouping(agentId, anchorCallId, controllerId);
+  const { controller, language } = useToolGrouping(agentId, anchorCallId, controllerId);
   const [, setRevision] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
@@ -1156,13 +1217,13 @@ export function ToolGroupCard({
           backgroundColor: theme.colors.surface1,
         }}
       >
-        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>Preparing tool group…</Text>
+        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{tr(language, "Preparing tool group…")}</Text>
       </View>
     );
   }
 
   const calls = group.calls;
-  const breakdown = groupBreakdown(calls);
+  const breakdown = groupBreakdown(calls, language);
   const failed = calls.filter((call) => call.status === "failed").length;
   const canceled = calls.filter((call) => call.status === "canceled").length;
   const showRunning = smoothedRunning && failed === 0;
@@ -1173,12 +1234,18 @@ export function ToolGroupCard({
       : canceled
         ? theme.colors.foregroundMuted
         : theme.colors.statusSuccess;
-  const statusText = showRunning ? "Running" : failed ? `${failed} failed` : canceled ? `${canceled} canceled` : "Done";
+  const statusText = showRunning
+    ? tr(language, "Running")
+    : failed
+      ? language === "zh-CN" ? `${failed} 项失败` : `${failed} failed`
+      : canceled
+        ? language === "zh-CN" ? `${canceled} 项已取消` : `${canceled} canceled`
+        : tr(language, "Done");
   const dark = isDarkColor(theme.colors.surface0);
   const selectedCall = calls.find((call) => call.callId === selectedCallId) ?? null;
   const summaryData: ToolCardData = {
     ...calls[calls.length - 1]!,
-    title: `${calls.length} tool calls`,
+    title: language === "zh-CN" ? `${calls.length} 次工具调用` : `${calls.length} tool calls`,
     subtitle: breakdown,
   };
 
@@ -1215,7 +1282,11 @@ export function ToolGroupCard({
       )}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${expanded ? "Collapse" : "Expand"} ${calls.length} grouped tool calls`}
+        accessibilityLabel={
+          language === "zh-CN"
+            ? `${expanded ? "收起" : "展开"}${calls.length} 次工具调用`
+            : `${expanded ? "Collapse" : "Expand"} ${calls.length} grouped tool calls`
+        }
         onPress={() => setExpanded((value) => !value)}
         style={({ pressed }) => ({
           minHeight: 42,
@@ -1272,13 +1343,14 @@ export function ToolGroupCard({
           onSelect={setSelectedCallId}
           visibleCount={visibleCount}
           onShowMore={() => setVisibleCount((value) => value + 12)}
+          language={language}
           theme={theme}
           layout={layout}
         />
       )}
       {selectedCall && (
         <Modal
-          title={`${selectedCall.title} details`}
+          title={language === "zh-CN" ? `${selectedCall.title}详情` : `${selectedCall.title} details`}
           icon={<Icon name={selectedCall.icon} size={17} color={theme.colors.foreground} />}
           open
           onOpenChange={(open) => {
@@ -1289,7 +1361,7 @@ export function ToolGroupCard({
           style={{ backgroundColor: theme.colors.surface0 }}
           contentContainerStyle={{ padding: layout.compact ? 12 : 16, gap: 0 }}
         >
-          <ToolDetails data={selectedCall} theme={theme} layout={layout} standalone />
+          <ToolDetails data={selectedCall} theme={theme} layout={layout} language={language} standalone />
         </Modal.Content>
       </Modal>
       )}
@@ -1304,7 +1376,7 @@ export function ToolCallCard({
   layout,
 }: PluginTimelineItemProps<z.output<typeof toolCallSchema>>) {
   const data = item.data;
-  useToolGrouping(agentId, data.callId, data.controllerId);
+  const { language } = useToolGrouping(agentId, data.callId, data.controllerId);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const canExpand = Boolean(data.primary || data.secondary || data.metadata.length > 0);
   const dark = isDarkColor(theme.colors.surface0);
@@ -1380,7 +1452,13 @@ export function ToolCallCard({
       )}
       <Pressable
         accessibilityRole={canExpand ? "button" : undefined}
-        accessibilityLabel={canExpand ? `Open ${data.title} details` : data.title}
+        accessibilityLabel={
+          canExpand
+            ? language === "zh-CN"
+              ? `打开${data.title}详情`
+              : `Open ${data.title} details`
+            : data.title
+        }
         disabled={!canExpand}
         onPress={() => setDetailsOpen(true)}
         style={({ pressed }) => [styles.header, pressed && { backgroundColor: theme.colors.surface2 }]}
@@ -1411,7 +1489,7 @@ export function ToolCallCard({
           ) : (
             <View style={styles.dot} />
           )}
-          {!layout.compact && <Text style={styles.statusText}>{statusLabel(data.status)}</Text>}
+          {!layout.compact && <Text style={styles.statusText}>{statusLabel(data.status, language)}</Text>}
           {canExpand && (
             <Icon name="ChevronRight" size={14} color={theme.colors.foregroundMuted} />
           )}
@@ -1419,7 +1497,7 @@ export function ToolCallCard({
       </Pressable>
       {canExpand && (
         <Modal
-          title={`${data.title} details`}
+          title={language === "zh-CN" ? `${data.title}详情` : `${data.title} details`}
           icon={<Icon name={data.icon} size={17} color={theme.colors.foreground} />}
           open={detailsOpen}
           onOpenChange={setDetailsOpen}
@@ -1428,7 +1506,7 @@ export function ToolCallCard({
             style={{ backgroundColor: theme.colors.surface0 }}
             contentContainerStyle={{ padding: layout.compact ? 12 : 16, gap: 0 }}
           >
-            <ToolDetails data={data} theme={theme} layout={layout} standalone />
+            <ToolDetails data={data} theme={theme} layout={layout} language={language} standalone />
           </Modal.Content>
         </Modal>
       )}

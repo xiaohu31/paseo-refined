@@ -8,21 +8,25 @@ import {
   SettingsCard,
   SettingsRow,
   SettingsSection,
+  SettingsSelect,
   SettingsSwitch,
 } from "@getpaseo/plugin/client/ui";
 import { Pressable, Text, View } from "react-native";
 import { refinedSettings } from "../shared/settings";
+import { resolveUiLanguage, tr, type UiLanguagePreference } from "./i18n";
 
 const MIN_THRESHOLD = 3;
 const MAX_THRESHOLD = 30;
 
 export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
   const settings = useSettings(refinedSettings);
+  const preference = settings.status === "ready" ? settings.values.uiLanguage : "auto";
+  const language = resolveUiLanguage(preference);
 
   if (settings.status === "loading") {
     return (
       <View style={{ padding: layout.compact ? 16 : 20 }}>
-        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 13 }}>Loading settings…</Text>
+        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 13 }}>{tr(language, "Loading settings…")}</Text>
       </View>
     );
   }
@@ -32,9 +36,9 @@ export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
       <SettingsSection title="Paseo Refined">
         <SettingsCard>
           <SettingsAction
-            label="Settings unavailable"
+            label={tr(language, "Settings unavailable")}
             hint={settings.error}
-            actionLabel="Try again"
+            actionLabel={tr(language, "Try again")}
             onPress={() => void settings.reload()}
           />
         </SettingsCard>
@@ -47,9 +51,9 @@ export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
       <SettingsSection title="Paseo Refined">
         <SettingsCard>
           <SettingsAction
-            label="Settings need to be reset"
+            label={tr(language, "Settings need to be reset")}
             hint={settings.error}
-            actionLabel="Restore defaults"
+            actionLabel={tr(language, "Restore defaults")}
             onPress={() => void settings.reset()}
             disabled={settings.saving}
           />
@@ -58,7 +62,7 @@ export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
     );
   }
 
-  const { groupConsecutiveTools, toolGroupThreshold } = settings.values;
+  const { groupConsecutiveTools, toolGroupThreshold, uiLanguage } = settings.values;
   const values = settings.values;
   const revision = settings.revision;
 
@@ -71,6 +75,11 @@ export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
   async function saveEnabled(enabled: boolean) {
     if (settings.saving) return;
     await settings.save({ ...values, groupConsecutiveTools: enabled }, revision);
+  }
+
+  async function saveLanguage(next: string) {
+    if (settings.saving || !["auto", "en", "zh-CN"].includes(next)) return;
+    await settings.save({ ...values, uiLanguage: next as UiLanguagePreference }, revision);
   }
 
   const controlButton = (disabled: boolean) => ({
@@ -88,26 +97,34 @@ export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
   return (
     <View style={{ gap: 22, paddingVertical: layout.compact ? 4 : 8 }}>
       <SettingsSection
-        title="Tool calls"
-        info="Long uninterrupted runs are condensed into one card. Tool details remain available inside the group."
+        title={tr(language, "Tool calls")}
+        info={
+          language === "zh-CN"
+            ? "较长的连续工具调用会收拢为一张卡片，每一项的完整详情仍可查看。"
+            : "Long uninterrupted runs are condensed into one card. Every tool's full details remain available."
+        }
       >
         <SettingsCard>
           <SettingsSwitch
-            label="Group long tool runs"
-            hint="Keeps short runs visible and condenses only busy sections."
+            label={tr(language, "Group long tool runs")}
+            hint={language === "zh-CN" ? "保留较短的调用序列，只收拢繁忙区段。" : "Keeps short runs visible and condenses only busy sections."}
             value={groupConsecutiveTools}
             onValueChange={(enabled) => void saveEnabled(enabled)}
             disabled={settings.saving}
           />
           <SettingsRow
-            label="Group at"
-            hint={`Runs with 1–${toolGroupThreshold - 1} calls stay as individual cards.`}
+            label={tr(language, "Group at")}
+            hint={
+              language === "zh-CN"
+                ? `连续 1–${toolGroupThreshold - 1} 次调用仍保持为独立卡片。`
+                : `Runs with 1–${toolGroupThreshold - 1} calls stay as individual cards.`
+            }
             error={settings.saveError}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Decrease tool grouping threshold"
+                accessibilityLabel={tr(language, "Decrease tool grouping threshold")}
                 disabled={!groupConsecutiveTools || settings.saving || toolGroupThreshold <= MIN_THRESHOLD}
                 onPress={() => void saveThreshold(toolGroupThreshold - 1)}
                 style={controlButton(!groupConsecutiveTools || settings.saving || toolGroupThreshold <= MIN_THRESHOLD)}
@@ -126,12 +143,12 @@ export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
                 }}
               >
                 <Text style={{ color: theme.colors.foreground, fontSize: 13, fontWeight: "600" }}>
-                  {toolGroupThreshold} calls
+                  {language === "zh-CN" ? `${toolGroupThreshold} 次` : `${toolGroupThreshold} calls`}
                 </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Increase tool grouping threshold"
+                accessibilityLabel={tr(language, "Increase tool grouping threshold")}
                 disabled={!groupConsecutiveTools || settings.saving || toolGroupThreshold >= MAX_THRESHOLD}
                 onPress={() => void saveThreshold(toolGroupThreshold + 1)}
                 style={controlButton(!groupConsecutiveTools || settings.saving || toolGroupThreshold >= MAX_THRESHOLD)}
@@ -143,11 +160,36 @@ export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
         </SettingsCard>
       </SettingsSection>
 
-      <SettingsSection title="Behavior">
+      <SettingsSection title={tr(language, "Language")}>
+        <SettingsCard>
+          <SettingsSelect
+            label={tr(language, "Interface language")}
+            hint={
+              language === "zh-CN"
+                ? "自动模式跟随设备区域；也可以为插件单独指定语言。"
+                : "Automatic follows the device locale, or you can override it for this plugin."
+            }
+            value={uiLanguage}
+            options={[
+              { label: tr(language, "Automatic"), value: "auto" },
+              { label: "English", value: "en" },
+              { label: "简体中文", value: "zh-CN" },
+            ]}
+            onValueChange={(value) => void saveLanguage(value)}
+            disabled={settings.saving}
+          />
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title={tr(language, "Behavior")}>
         <SettingsCard>
           <SettingsRow
-            label="Stable timeline position"
-            hint="Groups open in a sheet, so inspecting tools does not move the conversation."
+            label={tr(language, "Stable timeline position")}
+            hint={
+              language === "zh-CN"
+                ? "工具列表在会话中原地展开，单项详情使用弹窗显示。"
+                : "Tool lists expand in the conversation, while individual details open in a focused modal."
+            }
           >
             <View
               style={{
@@ -161,7 +203,7 @@ export function RefinedSettings({ theme, layout }: PluginSurfaceProps) {
               }}
             >
               <Icon name="Check" size={12} color={theme.colors.statusSuccess} />
-              <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>Enabled</Text>
+              <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>{tr(language, "Enabled")}</Text>
             </View>
           </SettingsRow>
         </SettingsCard>

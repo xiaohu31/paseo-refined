@@ -1,4 +1,5 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
+import type { UiLanguage } from "./i18n";
 import type { ToolCardData } from "./timeline";
 
 export type SourceToolCall = {
@@ -47,7 +48,7 @@ type AgentGroupState = {
 };
 
 type Membership = { groupId: string; role: "anchor" | "member" };
-type GroupingConfig = { enabled: boolean; threshold: number };
+type GroupingConfig = { enabled: boolean; threshold: number; language: UiLanguage };
 
 const controllers = new Map<string, ToolGroupingController>();
 let controllerSequence = 0;
@@ -94,16 +95,16 @@ function projectionRequiresRefresh(
 export class ToolGroupingController {
   readonly id = `tool-groups-${++controllerSequence}`;
   private readonly client: PluginClientContext;
-  private readonly present: (item: SourceToolCall) => ToolCardData;
+  private readonly present: (item: SourceToolCall, language: UiLanguage) => ToolCardData;
   private readonly agents = new Map<string, AgentGroupState>();
   private readonly listeners = new Map<string, Set<() => void>>();
   private membership = new Map<string, Membership>();
-  private config: GroupingConfig = { enabled: true, threshold: 7 };
+  private config: GroupingConfig = { enabled: true, threshold: 7, language: "en" };
   private removeTransformer: (() => void) | null = null;
   private refreshScheduled = false;
   private disposed = false;
 
-  constructor(client: PluginClientContext, present: (item: SourceToolCall) => ToolCardData) {
+  constructor(client: PluginClientContext, present: (item: SourceToolCall, language: UiLanguage) => ToolCardData) {
     this.client = client;
     this.present = present;
     controllers.set(this.id, this);
@@ -112,8 +113,12 @@ export class ToolGroupingController {
 
   configure(next: GroupingConfig) {
     const threshold = Math.max(3, Math.min(30, Math.round(next.threshold)));
-    if (this.config.enabled === next.enabled && this.config.threshold === threshold) return;
-    this.config = { enabled: next.enabled, threshold };
+    if (
+      this.config.enabled === next.enabled &&
+      this.config.threshold === threshold &&
+      this.config.language === next.language
+    ) return;
+    this.config = { enabled: next.enabled, threshold, language: next.language };
     this.recompute();
   }
 
@@ -351,7 +356,7 @@ export class ToolGroupingController {
           if (pending.length >= this.config.threshold && !pendingStartsAtOpenEdge) {
             const anchor = pending[0]!.item.callId;
             const id = `${state.agentId}:${anchor}`;
-            const calls = pending.map((token) => this.present(token.item));
+            const calls = pending.map((token) => this.present(token.item, this.config.language));
             nextGroups.set(id, { id, anchorCallId: anchor, calls });
             for (const token of pending) {
               nextMembership.set(token.item.callId, {
@@ -433,7 +438,7 @@ export class ToolGroupingController {
               type: "plugin",
               kind: "polished-tool-call",
               version: 1,
-              data: { ...this.present(item), controllerId: this.id },
+              data: { ...this.present(item, this.config.language), controllerId: this.id },
             },
           ],
         };
@@ -444,7 +449,7 @@ export class ToolGroupingController {
 
 export function createToolGroupingController(
   client: PluginClientContext,
-  present: (item: SourceToolCall) => ToolCardData,
+  present: (item: SourceToolCall, language: UiLanguage) => ToolCardData,
 ) {
   return new ToolGroupingController(client, present);
 }

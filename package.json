@@ -1,7 +1,14 @@
 {
-  "name": "paseo-mobile-polish",
+  "name": "paseo-refined",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Cross-platform timeline, tool-call, and Zinc theme refinements for Paseo.",
+  "keywords": [
+    "paseo",
+    "paseo-plugin",
+    "agent-ui",
+    "zinc-theme"
+  ],
   "files": [
     "paseo-plugin.json",
     "index.client.ts",
