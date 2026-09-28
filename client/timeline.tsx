@@ -13,7 +13,7 @@ import {
   ToolSummaryText,
   useSmoothedRunning,
 } from "./animations";
-import { visibleToolCalls } from "./tool-list";
+import { aggregateToolStatuses, visibleToolCalls } from "./tool-list";
 import { getToolGroupingController } from "./tool-groups";
 import { alpha, ToolDetails } from "./tool-details";
 import {
@@ -321,19 +321,20 @@ export function ToolGroupCard({
 
   const calls = group.calls;
   const breakdown = groupBreakdown(calls, language);
-  const failed = calls.filter((call) => call.status === "failed").length;
-  const canceled = calls.filter((call) => call.status === "canceled").length;
-  const showRunning = smoothedRunning && failed === 0;
+  const { failed, canceled, allFailed } = aggregateToolStatuses(calls);
+  const showRunning = smoothedRunning && !allFailed;
   const runningColor = theme.colors.foregroundMuted;
-  const statusColor = failed
-    ? theme.colors.statusDanger
-    : showRunning
-      ? runningColor
+  const statusColor = showRunning
+    ? runningColor
+    : failed
+      ? theme.colors.statusDanger
       : canceled
         ? theme.colors.foregroundMuted
         : theme.colors.statusSuccess;
   const statusText = showRunning
-    ? tr(language, "Running")
+    ? failed
+      ? language === "zh-CN" ? `运行中 · ${failed} 项失败` : `Running · ${failed} failed`
+      : tr(language, "Running")
     : failed
       ? language === "zh-CN" ? `${failed} 项失败` : `${failed} failed`
       : canceled
@@ -356,16 +357,16 @@ export function ToolGroupCard({
         marginVertical: 1,
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: failed
+        borderColor: allFailed
           ? alpha(theme.colors.statusDanger, "48")
           : showRunning
             ? alpha(runningColor, "38")
             : alpha(theme.colors.border, "B8"),
-        backgroundColor: showRunning || failed ? theme.colors.surface1 : theme.colors.surface0,
+        backgroundColor: showRunning || allFailed ? theme.colors.surface1 : theme.colors.surface0,
         overflow: "hidden",
       }}
     >
-      {(showRunning || failed > 0) && (
+      {(showRunning || allFailed) && (
         <View
           pointerEvents="none"
           style={{
@@ -376,8 +377,8 @@ export function ToolGroupCard({
             bottom: 7,
             width: 2,
             borderRadius: 1,
-            backgroundColor: failed ? theme.colors.statusDanger : runningColor,
-            opacity: failed ? 0.55 : 0.35,
+            backgroundColor: allFailed ? theme.colors.statusDanger : runningColor,
+            opacity: allFailed ? 0.55 : 0.35,
           }}
         />
       )}
