@@ -4,11 +4,21 @@ A calm, cross-platform interface refinement plugin for Paseo `>=0.9.2 <0.10.0`.
 
 ## Install
 
+Install directly from GitHub:
+
+```bash
+paseo plugin install github:xiaohu31/paseo-refined
+```
+
+You can also paste `github:xiaohu31/paseo-refined` into **Settings → Plugins → Plugin source**.
+
+Or install the published npm package:
+
 ```bash
 paseo plugin install npm:paseo-refined
 ```
 
-You can also paste `npm:paseo-refined` into **Settings → Plugins → Plugin source**.
+The npm source can likewise be pasted into the Plugin source field.
 
 ## What it changes
 

@@ -3,6 +3,14 @@
   "version": "0.1.1",
   "description": "Cross-platform timeline, tool-call, and Zinc theme refinements for Paseo.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiaohu31/paseo-refined.git"
+  },
+  "homepage": "https://github.com/xiaohu31/paseo-refined#readme",
+  "bugs": {
+    "url": "https://github.com/xiaohu31/paseo-refined/issues"
+  },
   "keywords": [
     "paseo",
     "paseo-plugin",
