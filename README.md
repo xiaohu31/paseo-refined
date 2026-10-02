@@ -1,6 +1,6 @@
 # Paseo Refined
 
-A calm, cross-platform interface refinement plugin for Paseo `>=0.9.2 <0.10.0`.
+A calm, cross-platform interface refinement plugin for Paseo `>=0.9.2 <0.11.0`.
 
 ## Install
 
