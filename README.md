@@ -1,6 +1,14 @@
 # Paseo Refined
 
-A calm, cross-platform interface refinement plugin for Paseo `>=0.9.2 <0.11.0`.
+A calm, cross-platform interface refinement plugin for Paseo `>=0.9.2 <1.0.0`.
+
+## Compatibility policy
+
+Paseo Refined supports the complete pre-1.0 Paseo series instead of requiring a manifest edit for
+every minor daemon update. Host contributions are registered independently: if a future 0.x runtime
+removes or temporarily lacks one API, that feature is skipped with a warning while the rest of the
+plugin continues loading. Paseo 1.0 remains an explicit compatibility boundary and will require a
+normal review before the range is widened.
 
 ## Install
 
@@ -67,7 +75,9 @@ in full only when details are opened.
 ## Development
 
 - `npm run typecheck` validates the plugin SDK and React Native contracts.
-- `npm test` covers grouping thresholds, turn boundaries, language re-projection, renderer
+- `npm test` also locks the pre-1.0 compatibility range and verifies graceful degradation when a
+  host contribution is unavailable.
+- The remaining tests cover grouping thresholds, turn boundaries, language re-projection, renderer
   snapshots, newest-tool visibility, settings migration, and long-detail handling.
 - `npm pack --dry-run` shows the exact publication payload; tests are excluded from the package.
 

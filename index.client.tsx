@@ -8,9 +8,17 @@ import {
 } from "./client/timeline";
 import { toolCallSchema, toolGroupSchema, toToolCardData } from "./client/tool-presentation";
 import { createToolGroupingController } from "./client/tool-groups";
+import { tryContribute } from "./shared/compatibility";
 
 export default function contribute(client: PluginClientContext) {
-  const cleanup = [
+  const cleanup: Array<() => void> = [];
+  const register = (label: string, contribution: () => () => void) => {
+    const remove = tryContribute(label, contribution);
+    if (remove) cleanup.push(remove);
+    return remove !== null;
+  };
+
+  register("Zinc Light theme", () =>
     client.addTheme({
       id: "quiet-light",
       name: "Zinc Light",
@@ -26,12 +34,16 @@ export default function contribute(client: PluginClientContext) {
         ring: "#A1A1AA",
       },
     }),
+  );
+  register("settings screen", () =>
     client.addSettingsScreen({
       id: "appearance",
       title: "Paseo Refined",
       icon: "SlidersHorizontal",
       Component: RefinedSettings,
     }),
+  );
+  register("Zinc Focus theme", () =>
     client.addTheme({
       id: "midnight-focus",
       name: "Zinc Focus",
@@ -47,6 +59,8 @@ export default function contribute(client: PluginClientContext) {
         ring: "#d4d4d8",
       },
     }),
+  );
+  register("OLED Black theme", () =>
     client.addTheme({
       id: "oled-black",
       name: "OLED Black",
@@ -62,43 +76,58 @@ export default function contribute(client: PluginClientContext) {
         ring: "#52525B",
       },
     }),
-    client.addTimelineTransformer({
-      id: "polished-reasoning",
-      query: { itemType: "reasoning" },
-      transform: ({ item, phase }) => ({
-        items: [
-          {
-            type: "plugin",
-            kind: "polished-reasoning",
-            version: 1,
-            data: { text: item.text, phase },
-          },
-        ],
-      }),
-    }),
+  );
+
+  const reasoningRenderer = register("reasoning renderer", () =>
     client.addTimelineRenderer({
       kind: "polished-reasoning",
       version: 1,
       schema: reasoningSchema,
       Component: ReasoningCard,
     }),
+  );
+  if (reasoningRenderer) {
+    register("reasoning transformer", () =>
+      client.addTimelineTransformer({
+        id: "polished-reasoning",
+        query: { itemType: "reasoning" },
+        transform: ({ item, phase }) => ({
+          items: [
+            {
+              type: "plugin",
+              kind: "polished-reasoning",
+              version: 1,
+              data: { text: item.text, phase },
+            },
+          ],
+        }),
+      }),
+    );
+  }
+
+  const toolCallRenderer = register("tool-call renderer", () =>
     client.addTimelineRenderer({
       kind: "polished-tool-call",
       version: 1,
       schema: toolCallSchema,
       Component: ToolCallCard,
     }),
+  );
+  const toolGroupRenderer = register("tool-group renderer", () =>
     client.addTimelineRenderer({
       kind: "polished-tool-group",
       version: 1,
       schema: toolGroupSchema,
       Component: ToolGroupCard,
     }),
-  ];
-  const toolGrouping = createToolGroupingController(client, toToolCardData);
+  );
+  const toolGrouping =
+    toolCallRenderer && toolGroupRenderer
+      ? tryContribute("tool grouping", () => createToolGroupingController(client, toToolCardData))
+      : null;
 
   return () => {
-    toolGrouping.dispose();
+    toolGrouping?.dispose();
     for (const remove of cleanup.reverse()) remove();
   };
 }
